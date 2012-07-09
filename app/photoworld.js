@@ -278,6 +278,10 @@
 		initialize: function(args) {
 			// Extend/Overwrite the parameters with the ones passed in arguments
 			_.extend(this, args);
+
+			// Compile shaders
+			this.compile(gl.FRAGMENT_SHADER);
+			this.compile(gl.VERTEX_SHADER);
 		},
 		// Parse the data returned by fetch()
 		parse: function(data) {
@@ -304,7 +308,24 @@
 			}
 
 			return data;
-		}
+		},
+		compile: function(type) {
+			var source = (gl.FRAGMENT_SHADER === type) ? "fsh" : "vsh";
+
+			var shader = gl.createShader(type);
+
+			gl.shaderSource(shader, this.get(source));
+			gl.compileShader(shader);
+
+			if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+				console.log(gl.getShaderInfoLog(shader));
+				return null;
+			}
+
+			return shader;
+		},
+		link: function() {},
+		use: function() {}
 	});
 
 	// Ready, execute the callback once the shader are loaded
