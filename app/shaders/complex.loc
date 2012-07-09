@@ -1,9 +1,9 @@
 {
-	"attrib": [
+	"attrib": {
 		"aVertexPosition": 0
-	],
-	"uniform": [
+	},
+	"uniform": {
 		"uMVMatrix": -1,
 		"uPMatrix": -1
-	]
+	}
 }

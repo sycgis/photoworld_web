@@ -298,13 +298,11 @@
 					// Locations were returned
 					if (RC.tools.exists(data[index].loc)) {
 						// Parse and decode locations of attribs and uniforms
-						console.log(RC.tools.htmlDecode(data[index].loc));
-						$.parseJSON('{"attrib": 0}');
-						//data[index].loc = $.parseJSON(RC.tools.htmlDecode(data[index].loc));
+						data[index].loc = $.parseJSON(RC.tools.htmlDecode(data[index].loc));
 					}
 				}
 			}
-			console.log(data);
+
 			return data;
 		}
 	});
