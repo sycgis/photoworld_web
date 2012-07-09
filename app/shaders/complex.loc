@@ -3,7 +3,7 @@
 		"aVertexPosition": 0
 	],
 	"uniform": [
-		"uMVMatrix": 0,
-		"uPMatrix": 0
+		"uMVMatrix": -1,
+		"uPMatrix": -1
 	]
 }

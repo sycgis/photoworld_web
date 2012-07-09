@@ -137,41 +137,52 @@
 					}
 				}
 			}
+			else {
+				// Reset templates
+				this.reset();
+			}
+
 			return data;
 		},
 		// Fetching markup and localization duplicates template, this merges the two
 		merge: function(callback) {
 			var merging = false;
 
-			// Get template names and avoid duplicates
-			var names = _.uniq(this.pluck("_name"));
+			// No templates, execute callback anyway
+			if (this.models.length === 0 && !this.merged) {
+				merging = true;
+			}
+			else {
+				// Get template names and avoid duplicates
+				var names = _.uniq(this.pluck("_name"));
 
-			// Loop through available names
-			for (var index in names) {
-				// Get the templates matching the name
-				var models = this.where({ _name: names[index]});
+				// Loop through available names
+				for (var index in names) {
+					// Get the templates matching the name
+					var models = this.where({ _name: names[index]});
 
-				// Merge them if they are two
-				if (2 === models.length) {
-					merging = true;
+					// Merge them if they are two
+					if (2 === models.length) {
+						merging = true;
 
-					// 1 has markup -> set 0's markup with 1's markup and get rid of 1
-					if (models[1].get("hasMarkup")) {
-						models[0].set("markup", models[1].get("markup"));
-						models[0].set("hasMarkup", models[1].get("hasMarkup"));
-						this.remove(models[1]);
-					}
-					// 1 has localization -> set 0's localization with 1's localization and get rid of 1
-					if (models[1].get("hasLocalization")) {
-						models[0].set("localization", models[1].get("localization"));
-						models[0].set("hasLocalization",  models[1].get("hasLocalization"));
-						this.remove(models[1]);
+						// 1 has markup -> set 0's markup with 1's markup and get rid of 1
+						if (models[1].get("hasMarkup")) {
+							models[0].set("markup", models[1].get("markup"));
+							models[0].set("hasMarkup", models[1].get("hasMarkup"));
+							this.remove(models[1]);
+						}
+						// 1 has localization -> set 0's localization with 1's localization and get rid of 1
+						if (models[1].get("hasLocalization")) {
+							models[0].set("localization", models[1].get("localization"));
+							models[0].set("hasLocalization",  models[1].get("hasLocalization"));
+							this.remove(models[1]);
+						}
 					}
 				}
 			}
 
 			// Merging occured, execute callback
-			if (merging || this.length === 0) {
+			if (merging) {
 				this.merged = true;
 				if (_.isFunction(callback)) {
 					callback();
@@ -224,7 +235,7 @@
 	});
 
 	// Ready, execute the callback once the templates are loaded
-	RC.template.ready = function(holder, collection, callback) {
+	RC.template.ready = function(holder, args, callback) {
 		// Make sure templates are loaded
 		if (RC.tools.exists(holder.templates) && holder.templates.merged) {
 			// Templates have already been fetched...
@@ -233,7 +244,7 @@
 			}
 		}
 		else {
-			holder.templates = new RC.template.TemplateCollection(collection);
+			holder.templates = new RC.template.TemplateCollection(args);
 			holder.templates.fetchAll(function() {
 				// All the templates have been fetched, let's get to business...
 				if (_.isFunction(callback)) {
@@ -251,17 +262,72 @@
 	RC.shader.ShaderModel = Backbone.Model.extend({
 		defaults: {
 			_name: "error",
-			fragmentSource: "",
-			vertexSource: "",
-			programId: 0,
-			attribLocation: [],
-			uniformLocation: []
+			fsh: "",
+			vsh: "",
+			loc: {},
+			programId: 0
 		},
 		initialize: function() {}
 	});
 
 	// Collection
-	RC.shader.ShaderCollection = Backbone.Collection.extend({});
+	RC.shader.ShaderCollection = Backbone.Collection.extend({
+		url: config.url + "/app/shaders/shaders.json",
+		model: RC.shader.ShaderModel,
+		// Initialize parameters
+		initialize: function(args) {
+			// Extend/Overwrite the parameters with the ones passed in arguments
+			_.extend(this, args);
+		},
+		// Parse the data returned by fetch()
+		parse: function(data) {
+			// Make sure valid data is returned
+			if (RC.tools.exists(data) && data.length >= 1) {
+				// Loop through shaders
+				for (var index in data) {
+					// Fragment source was returned
+					if (RC.tools.exists(data[index].fsh)) {
+						// Decode fragment source
+						data[index].fsh = RC.tools.htmlDecode(data[index].fsh);
+					}
+					// Vertex source was returned
+					if (RC.tools.exists(data[index].vsh)) {
+						// Decode vertex source
+						data[index].vsh = RC.tools.htmlDecode(data[index].vsh);
+					}
+					// Locations were returned
+					if (RC.tools.exists(data[index].loc)) {
+						// Parse and decode locations of attribs and uniforms
+						console.log(RC.tools.htmlDecode(data[index].loc));
+						$.parseJSON('{"attrib": 0}');
+						//data[index].loc = $.parseJSON(RC.tools.htmlDecode(data[index].loc));
+					}
+				}
+			}
+			console.log(data);
+			return data;
+		}
+	});
+
+	// Ready, execute the callback once the shader are loaded
+	RC.shader.ready = function(holder, args, callback) {
+		// Make sure shaders are loaded
+		if (RC.tools.exists(holder.shaders)) {
+			// Shaders have already been fetched...
+			if (_.isFunction(callback)) {
+				callback();
+			}
+		}
+		else {
+			holder.shaders = new RC.shader.ShaderCollection(args);
+			holder.shaders.fetch().done(function() {
+				// All the shaders have been fetched, let's get to business...
+				if (_.isFunction(callback)) {
+					callback();
+				}
+			});
+		}
+	};
 
 
 	///////////////////////////////////////////////////////////////////////////
@@ -341,8 +407,7 @@
 				RC.photoworld.world.view.render();
 			};
 
-			//RC.template.ready(RC.photoworld, {}, buildWorld); // No templates for now
-			buildWorld();
+			RC.template.ready(RC.photoworld, {}, buildWorld);
 		}
 	});
 
@@ -353,7 +418,7 @@
 	RC.photoworld.init = function(){
 		console.log("Hello PhotoWorld!");
 
-
+		RC.shader.ready(RC.photoworld, {}, function() { console.log(RC.photoworld.shaders); });
 /*
 		// Check WebGL support
 		var canvas = $("canvas").get(0);
@@ -369,6 +434,7 @@
 			return;
 		}
 */
+/*
 		var gl;
 		function initGL(canvas) {
 			try {
@@ -520,7 +586,7 @@
 		}
 
 		webGLStart();
-
+*/
 		// Start router
 		RC.photoworld.router = new RC.photoworld.Router();
 		Backbone.history.start({ pushState: true });
