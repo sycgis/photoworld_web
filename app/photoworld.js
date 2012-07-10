@@ -36,11 +36,8 @@
 	// Template classes holder
 	RC.template = {};
 
-	// Shaders classes holder
-	RC.shader = {};
-
-	// WebGL classes holder
-	RC.webgl = {};
+	// WebGL renderer classes holder
+	RC.renderer = {};
 
 	// Photoworld classes holder
 	RC.photoworld = {};
@@ -109,7 +106,7 @@
 	// Collection
 	RC.template.TemplateCollection = Backbone.Collection.extend({
 		lang: "en",
-		merged: false,
+		isReady: false,
 		baseURL: config.url + "/app/templates",
 		model: RC.template.TemplateModel,
 		// Initialize parameters
@@ -144,13 +141,16 @@
 
 			return data;
 		},
-		// Fetching markup and localization duplicates template, this merges the two
+		// Fetching markup and localization duplicates templates, this merges them
 		merge: function(callback) {
-			var merging = false;
+			// Templates are already ready, no need for merging
+			if (this.isReady) {
+				return;
+			}
 
-			// No templates, execute callback anyway
-			if (this.models.length === 0 && !this.merged) {
-				merging = true;
+			// No templates mean they are ready
+			if (this.models.length === 0) {
+				this.isReady = true;
 			}
 			else {
 				// Get template names and avoid duplicates
@@ -163,7 +163,7 @@
 
 					// Merge them if they are two
 					if (2 === models.length) {
-						merging = true;
+						this.isReady = true;
 
 						// 1 has markup -> set 0's markup with 1's markup and get rid of 1
 						if (models[1].get("hasMarkup")) {
@@ -181,9 +181,8 @@
 				}
 			}
 
-			// Merging occured, execute callback
-			if (merging) {
-				this.merged = true;
+			// Templates are ready, execute callback
+			if (this.isReady) {
 				if (_.isFunction(callback)) {
 					callback();
 				}
@@ -192,12 +191,14 @@
 		// Fetch the markup only and try to merge it once it's received
 		fetchMarkup: function(callback) {
 			var that = this;
+			this.isReady = false;
 			this.url = this.baseURL + "/html.json";
 			this.fetch({ add: true }).done(function() { that.merge(callback); });
 		},
 		// Fetch the localization only and try to merge it once it's received
 		fetchLocalization: function(callback) {
 			var that = this;
+			this.isReady = false;
 			this.url = this.baseURL + "/" + this.lang + ".json";
 			this.fetch({ add: true }).done(function() { that.merge(callback); });
 		},
@@ -237,7 +238,7 @@
 	// Ready, execute the callback once the templates are loaded
 	RC.template.ready = function(holder, args, callback) {
 		// Make sure templates are loaded
-		if (RC.tools.exists(holder.templates) && holder.templates.merged) {
+		if (RC.tools.exists(holder.templates) && holder.templates.isReady) {
 			// Templates have already been fetched...
 			if (_.isFunction(callback)) {
 				callback();
@@ -254,7 +255,7 @@
 		}
 	};
 
-
+/*
 	///////////////////////////////////////////////////////////////////////////
 	// $SHADER
 
@@ -262,12 +263,78 @@
 	RC.shader.ShaderModel = Backbone.Model.extend({
 		defaults: {
 			_name: "error",
-			fsh: "",
-			vsh: "",
-			loc: {},
-			programId: 0
+			fragmentSource: "",
+			vertexSource: "",
+			locations: {},
+			fragmentId: -1,
+			vertexId: -1,
+			programId: -1
 		},
-		initialize: function() {}
+		initialize: function() {
+			this.compile();
+			this.link();
+			this.bind();
+		},
+		compile: function(type) {
+			// Fragment
+			var fragmentId = gl.createShader(gl.FRAGMENT_SHADER);
+
+			gl.shaderSource(fragmentId, this.get("fragmentSource"));
+			gl.compileShader(fragmentId);
+
+			if (!gl.getShaderParameter(fragmentId, gl.COMPILE_STATUS)) {
+				console.log(gl.getShaderInfoLog(fragmentId));
+				return null;
+			}
+			this.set("fragmentId", fragmentId);
+
+			// Vertex
+			var vertexId = gl.createShader(gl.VERTEX_SHADER);
+
+			gl.shaderSource(vertexId, this.get("vertexSource"));
+			gl.compileShader(vertexId);
+
+			if (!gl.getShaderParameter(vertexId, gl.COMPILE_STATUS)) {
+				console.log(gl.getShaderInfoLog(vertexId));
+				return null;
+			}
+			this.set("vertexId", vertexId);
+		},
+		link: function() {
+			var programId = gl.createProgram();
+
+			gl.attachShader(programId, fragmentId);
+			gl.attachShader(programId, vertexId);
+			gl.linkProgram(programId);
+
+			if (!gl.getProgramParameter(programId, gl.LINK_STATUS)) {
+				console.log("Could not initialise shaders");
+			}
+			this.set("programId", programId);
+		},
+		bind: function() {
+			var locations = this.get("locations");
+			gl.useProgram(programId);
+
+			// Attrib
+			if (RC.tools.exists(locations.attrib)) {
+				// ...
+			}
+
+			// Uniform
+			if (RC.tools.exists(locations.uniform)) {
+				// ...
+			}
+
+			shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+			gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+			shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+			shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+		},
+		use: function() {
+			gl.useProgram(programId);
+		}
 	});
 
 	// Collection
@@ -292,40 +359,23 @@
 					// Fragment source was returned
 					if (RC.tools.exists(data[index].fsh)) {
 						// Decode fragment source
-						data[index].fsh = RC.tools.htmlDecode(data[index].fsh);
+						data[index].fragmentSource = RC.tools.htmlDecode(data[index].fsh);
 					}
 					// Vertex source was returned
 					if (RC.tools.exists(data[index].vsh)) {
 						// Decode vertex source
-						data[index].vsh = RC.tools.htmlDecode(data[index].vsh);
+						data[index].vertexSource = RC.tools.htmlDecode(data[index].vsh);
 					}
 					// Locations were returned
 					if (RC.tools.exists(data[index].loc)) {
 						// Parse and decode locations of attribs and uniforms
-						data[index].loc = $.parseJSON(RC.tools.htmlDecode(data[index].loc));
+						data[index].locations = $.parseJSON(RC.tools.htmlDecode(data[index].loc));
 					}
 				}
 			}
 
 			return data;
-		},
-		compile: function(type) {
-			var source = (gl.FRAGMENT_SHADER === type) ? "fsh" : "vsh";
-
-			var shader = gl.createShader(type);
-
-			gl.shaderSource(shader, this.get(source));
-			gl.compileShader(shader);
-
-			if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-				console.log(gl.getShaderInfoLog(shader));
-				return null;
-			}
-
-			return shader;
-		},
-		link: function() {},
-		use: function() {}
+		}
 	});
 
 	// Ready, execute the callback once the shader are loaded
@@ -362,7 +412,7 @@
 		initialize: function() {},
 		render: function() {}
 	});
-
+*/
 
 	///////////////////////////////////////////////////////////////////////////
 	// $PHOTO
@@ -437,7 +487,8 @@
 	RC.photoworld.init = function(){
 		console.log("Hello PhotoWorld!");
 
-		RC.shader.ready(RC.photoworld, {}, function() { console.log(RC.photoworld.shaders); });
+//		RC.photoworld.renderer = RC.webgl.Renderer({});
+//		RC.webgl.shader.ready(RC.photoworld, {}, function() { console.log(RC.photoworld.renderer.shaders); });
 /*
 		// Check WebGL support
 		var canvas = $("canvas").get(0);
