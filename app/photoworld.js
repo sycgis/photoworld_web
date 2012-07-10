@@ -72,7 +72,6 @@
 	};
 
 
-
 	///////////////////////////////////////////////////////////////////////////
 	// $TEMPLATE
 
@@ -312,23 +311,30 @@
 		},
 		bind: function(gl) {
 			var locations = this.get("loc");
-			gl.useProgram(this.get("program"));
+			var program = this.get("program");
+			gl.useProgram(program);
 
 			// Attrib
 			if (RC.tools.exists(locations.attrib)) {
-				// ...
+				for (var attrib in locations.attrib) {
+					if (-1 !== locations.attrib[attrib]) {
+						// Bind attribute location
+						gl.bindAttribLocation(program, locations.attrib[attrib], attrib);
+					}
+					else {
+						// Get attribute location
+						locations.attrib[attrib] = gl.getAttribLocation(program, attrib);
+					}
+				}
 			}
 
 			// Uniform
 			if (RC.tools.exists(locations.uniform)) {
-				// ...
+				for (var uniform in locations.uniform) {
+					// Get uniform location
+					locations.uniform[uniform] = gl.getUniformLocation(program, uniform);
+				}
 			}
-
-			//shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-			//gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
-
-			//shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
-			//shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
 		},
 		use: function(gl) {
 			gl.useProgram(this.get("program"));
@@ -408,6 +414,10 @@
 
 			var gl;
 			var canvas = this.$el[0];
+			if (!RC.tools.exists(canvas)) {
+				console.log("Canvas not available!");
+				return;
+			}
 
 			// Initialize WebGL
 			try {
@@ -417,7 +427,7 @@
 			}
 			catch (e) {}
 
-			if (!gl) {
+			if (!RC.tools.exists(gl)) {
 				console.log("WebGL not available!");
 				return;
 			}
