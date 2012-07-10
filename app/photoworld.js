@@ -110,9 +110,9 @@
 		baseURL: config.url + "/app/templates",
 		model: RC.template.TemplateModel,
 		// Initialize parameters
-		initialize: function(args) {
-			// Extend/Overwrite the parameters with the ones passed in arguments
-			_.extend(this, args);
+		initialize: function(args, options) {
+			// Extend/Overwrite the parameters with the options passed in arguments
+			_.extend(this, options);
 		},
 		// Parse the data returned by fetch()
 		parse: function(data) {
@@ -133,10 +133,6 @@
 						data[index].hasLocalization = true;
 					}
 				}
-			}
-			else {
-				// Reset templates
-				this.reset();
 			}
 
 			return data;
@@ -236,7 +232,7 @@
 	});
 
 	// Ready, execute the callback once the templates are loaded
-	RC.template.ready = function(holder, args, callback) {
+	RC.template.ready = function(holder, options, callback) {
 		// Make sure templates are loaded
 		if (RC.tools.exists(holder.templates) && holder.templates.isReady) {
 			// Templates have already been fetched...
@@ -245,7 +241,7 @@
 			}
 		}
 		else {
-			holder.templates = new RC.template.TemplateCollection(args);
+			holder.templates = new RC.template.TemplateCollection(null, options);
 			holder.templates.fetchAll(function() {
 				// All the templates have been fetched, let's get to business...
 				if (_.isFunction(callback)) {
@@ -255,66 +251,68 @@
 		}
 	};
 
-/*
+
 	///////////////////////////////////////////////////////////////////////////
-	// $SHADER
+	// $RENDERER
 
 	// Model
-	RC.shader.ShaderModel = Backbone.Model.extend({
+	RC.renderer.ShaderModel = Backbone.Model.extend({
 		defaults: {
 			_name: "error",
-			fragmentSource: "",
-			vertexSource: "",
-			locations: {},
-			fragmentId: -1,
-			vertexId: -1,
-			programId: -1
+			fsh: "",
+			vsh: "",
+			loc: {},
+			fragmentShader: null,
+			vertexShader: null,
+			program: null
 		},
-		initialize: function() {
-			this.compile();
-			this.link();
-			this.bind();
+		initialize: function(args, options) {
+			var gl = options.collection.gl;
+
+			this.compile(gl);
+			this.link(gl);
+			this.bind(gl);
 		},
-		compile: function(type) {
+		compile: function(gl) {
 			// Fragment
-			var fragmentId = gl.createShader(gl.FRAGMENT_SHADER);
+			var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
 
-			gl.shaderSource(fragmentId, this.get("fragmentSource"));
-			gl.compileShader(fragmentId);
+			gl.shaderSource(fragmentShader, this.get("fsh"));
+			gl.compileShader(fragmentShader);
 
-			if (!gl.getShaderParameter(fragmentId, gl.COMPILE_STATUS)) {
-				console.log(gl.getShaderInfoLog(fragmentId));
+			if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+				console.log(gl.getShaderInfoLog(fragmentShader));
 				return null;
 			}
-			this.set("fragmentId", fragmentId);
+			this.set("fragmentShader", fragmentShader);
 
 			// Vertex
-			var vertexId = gl.createShader(gl.VERTEX_SHADER);
+			var vertexShader = gl.createShader(gl.VERTEX_SHADER);
 
-			gl.shaderSource(vertexId, this.get("vertexSource"));
-			gl.compileShader(vertexId);
+			gl.shaderSource(vertexShader, this.get("vsh"));
+			gl.compileShader(vertexShader);
 
-			if (!gl.getShaderParameter(vertexId, gl.COMPILE_STATUS)) {
-				console.log(gl.getShaderInfoLog(vertexId));
+			if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+				console.log(gl.getShaderInfoLog(vertexShader));
 				return null;
 			}
-			this.set("vertexId", vertexId);
+			this.set("vertexShader", vertexShader);
 		},
-		link: function() {
-			var programId = gl.createProgram();
+		link: function(gl) {
+			var program = gl.createProgram();
 
-			gl.attachShader(programId, fragmentId);
-			gl.attachShader(programId, vertexId);
-			gl.linkProgram(programId);
+			gl.attachShader(program, this.get("fragmentShader"));
+			gl.attachShader(program, this.get("vertexShader"));
+			gl.linkProgram(program);
 
-			if (!gl.getProgramParameter(programId, gl.LINK_STATUS)) {
+			if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 				console.log("Could not initialise shaders");
 			}
-			this.set("programId", programId);
+			this.set("program", program);
 		},
-		bind: function() {
-			var locations = this.get("locations");
-			gl.useProgram(programId);
+		bind: function(gl) {
+			var locations = this.get("loc");
+			gl.useProgram(this.get("program"));
 
 			// Attrib
 			if (RC.tools.exists(locations.attrib)) {
@@ -326,29 +324,27 @@
 				// ...
 			}
 
-			shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-			gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+			//shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+			//gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
 
-			shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
-			shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+			//shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+			//shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
 		},
-		use: function() {
-			gl.useProgram(programId);
+		use: function(gl) {
+			gl.useProgram(this.get("program"));
 		}
 	});
 
 	// Collection
-	RC.shader.ShaderCollection = Backbone.Collection.extend({
+	RC.renderer.ShaderCollection = Backbone.Collection.extend({
+		gl: null,
+		isReady: false,
 		url: config.url + "/app/shaders/shaders.json",
-		model: RC.shader.ShaderModel,
+		model: RC.renderer.ShaderModel,
 		// Initialize parameters
-		initialize: function(args) {
-			// Extend/Overwrite the parameters with the ones passed in arguments
-			_.extend(this, args);
-
-			// Compile shaders
-			this.compile(gl.FRAGMENT_SHADER);
-			this.compile(gl.VERTEX_SHADER);
+		initialize: function(args, options) {
+			// Extend/Overwrite the parameters with the options in arguments
+			_.extend(this, options);
 		},
 		// Parse the data returned by fetch()
 		parse: function(data) {
@@ -359,18 +355,20 @@
 					// Fragment source was returned
 					if (RC.tools.exists(data[index].fsh)) {
 						// Decode fragment source
-						data[index].fragmentSource = RC.tools.htmlDecode(data[index].fsh);
+						data[index].fsh = RC.tools.htmlDecode(data[index].fsh);
 					}
 					// Vertex source was returned
 					if (RC.tools.exists(data[index].vsh)) {
 						// Decode vertex source
-						data[index].vertexSource = RC.tools.htmlDecode(data[index].vsh);
+						data[index].vsh = RC.tools.htmlDecode(data[index].vsh);
 					}
 					// Locations were returned
 					if (RC.tools.exists(data[index].loc)) {
 						// Parse and decode locations of attribs and uniforms
-						data[index].locations = $.parseJSON(RC.tools.htmlDecode(data[index].loc));
+						data[index].loc = $.parseJSON(RC.tools.htmlDecode(data[index].loc));
 					}
+					// GL context
+					data[index].gl = this.gl;
 				}
 			}
 
@@ -378,17 +376,17 @@
 		}
 	});
 
-	// Ready, execute the callback once the shader are loaded
-	RC.shader.ready = function(holder, args, callback) {
+	// Ready, execute the callback once the shaders are loaded
+	RC.renderer.shadersReady = function(holder, options, callback) {
 		// Make sure shaders are loaded
-		if (RC.tools.exists(holder.shaders)) {
+		if (RC.tools.exists(holder.shaders) && holder.shaders.isReady) {
 			// Shaders have already been fetched...
 			if (_.isFunction(callback)) {
 				callback();
 			}
 		}
 		else {
-			holder.shaders = new RC.shader.ShaderCollection(args);
+			holder.shaders = new RC.renderer.ShaderCollection(null, options);
 			holder.shaders.fetch().done(function() {
 				// All the shaders have been fetched, let's get to business...
 				if (_.isFunction(callback)) {
@@ -399,20 +397,46 @@
 	};
 
 
-	///////////////////////////////////////////////////////////////////////////
-	// $WEBGL
-
-	// Model
-	RC.webgl.RendererModel = Backbone.Model.extend({});
-
-	// View
-	RC.webgl.RendererView = Backbone.View.extend({
+	// Renderer
+	RC.renderer.Renderer = Backbone.View.extend({
 		el: "canvas",
+		gl: null,
 		events: {},
-		initialize: function() {},
+		initialize: function(args) {
+			// Extend/Overwrite the parameters with the ones passed in arguments
+			_.extend(this, args);
+
+			var gl;
+			var canvas = this.$el[0];
+
+			// Initialize WebGL
+			try {
+				gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+				gl.viewportWidth = canvas.width;
+				gl.viewportHeight = canvas.height;
+			}
+			catch (e) {}
+
+			if (!gl) {
+				console.log("WebGL not available!");
+				return;
+			}
+			this.gl = gl;
+
+			// Create callback that will execute once both shaders and buffers are ready
+			var callback = function() {
+				if (RC.tools.exists(RC.renderer.shaders) && RC.renderer.shaders.isReady && RC.tools.exists(RC.renderer.buffers) && RC.renderer.buffers.isReady) {
+					// ...
+				}
+			};
+
+			// Request shaders and buffers
+			RC.renderer.shadersReady(RC.renderer, { gl: this.gl }, function() { console.log(RC.renderer.shaders); });
+			//RC.renderer.buffersReady(RC.renderer, {}, function() { console.log(RC.renderer.buffers); });
+		},
 		render: function() {}
 	});
-*/
+
 
 	///////////////////////////////////////////////////////////////////////////
 	// $PHOTO
@@ -487,99 +511,8 @@
 	RC.photoworld.init = function(){
 		console.log("Hello PhotoWorld!");
 
-//		RC.photoworld.renderer = RC.webgl.Renderer({});
-//		RC.webgl.shader.ready(RC.photoworld, {}, function() { console.log(RC.photoworld.renderer.shaders); });
+		RC.photoworld.renderer = new RC.renderer.Renderer({});
 /*
-		// Check WebGL support
-		var canvas = $("canvas").get(0);
-		try {
-			// Try to grab the standard context. If it fails, fallback to experimental
-			RC.photoworld.gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-		}
-		catch (e) {}
-
-		if (!RC.tools.exists(RC.photoworld.gl)) {
-			// We don't have GL context, give up now
-			console.log("WebGL not available!");
-			return;
-		}
-*/
-/*
-		var gl;
-		function initGL(canvas) {
-			try {
-				gl = canvas.getContext("experimental-webgl");
-				gl.viewportWidth = canvas.width;
-				gl.viewportHeight = canvas.height;
-			} catch (e) {
-			}
-			if (!gl) {
-				alert("Could not initialise WebGL, sorry :-(");
-			}
-		}
-
-
-		function getShader(gl, id) {
-			var shaderScript = document.getElementById(id);
-			if (!shaderScript) {
-				return null;
-			}
-
-			var str = "";
-			var k = shaderScript.firstChild;
-			while (k) {
-				if (k.nodeType == 3) {
-					str += k.textContent;
-				}
-				k = k.nextSibling;
-			}
-
-			var shader;
-			if (shaderScript.type == "x-shader/x-fragment") {
-				shader = gl.createShader(gl.FRAGMENT_SHADER);
-			} else if (shaderScript.type == "x-shader/x-vertex") {
-				shader = gl.createShader(gl.VERTEX_SHADER);
-			} else {
-				return null;
-			}
-
-			gl.shaderSource(shader, str);
-			gl.compileShader(shader);
-
-			if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-				alert(gl.getShaderInfoLog(shader));
-				return null;
-			}
-
-			return shader;
-		}
-
-
-		var shaderProgram;
-
-		function initShaders() {
-			var fragmentShader = getShader(gl, "shader-fs");
-			var vertexShader = getShader(gl, "shader-vs");
-
-			shaderProgram = gl.createProgram();
-			gl.attachShader(shaderProgram, vertexShader);
-			gl.attachShader(shaderProgram, fragmentShader);
-			gl.linkProgram(shaderProgram);
-
-			if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-				alert("Could not initialise shaders");
-			}
-
-			gl.useProgram(shaderProgram);
-
-			shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-			gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
-
-			shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
-			shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
-		}
-
-
 		var mvMatrix = mat4.create();
 		var pMatrix = mat4.create();
 
