@@ -254,7 +254,7 @@
 	///////////////////////////////////////////////////////////////////////////
 	// $RENDERER
 
-	// Model
+	// Shader Model
 	RC.renderer.ShaderModel = Backbone.Model.extend({
 		defaults: {
 			_name: "error",
@@ -319,12 +319,14 @@
 				for (var attrib in locations.attrib) {
 					if (-1 !== locations.attrib[attrib]) {
 						// Bind attribute location
-						gl.bindAttribLocation(program, locations.attrib[attrib], attrib);
+						//gl.bindAttribLocation(program, locations.attrib[attrib], attrib);
+						locations.attrib[attrib] = gl.getAttribLocation(program, attrib);
 					}
 					else {
 						// Get attribute location
 						locations.attrib[attrib] = gl.getAttribLocation(program, attrib);
 					}
+					gl.enableVertexAttribArray(locations.attrib[attrib]);
 				}
 			}
 
@@ -341,7 +343,7 @@
 		}
 	});
 
-	// Collection
+	// Shader Collection
 	RC.renderer.ShaderCollection = Backbone.Collection.extend({
 		gl: null,
 		isReady: false,
@@ -383,17 +385,17 @@
 	});
 
 	// Ready, execute the callback once the shaders are loaded
-	RC.renderer.shadersReady = function(holder, options, callback) {
+	RC.renderer.shadersReady = function(options, callback) {
 		// Make sure shaders are loaded
-		if (RC.tools.exists(holder.shaders) && holder.shaders.isReady) {
+		if (RC.tools.exists(RC.renderer.shaders) && RC.renderer.shaders.isReady) {
 			// Shaders have already been fetched...
 			if (_.isFunction(callback)) {
 				callback();
 			}
 		}
 		else {
-			holder.shaders = new RC.renderer.ShaderCollection(null, options);
-			holder.shaders.fetch().done(function() {
+			RC.renderer.shaders = new RC.renderer.ShaderCollection(null, options);
+			RC.renderer.shaders.fetch().done(function() {
 				// All the shaders have been fetched, let's get to business...
 				if (_.isFunction(callback)) {
 					callback();
@@ -403,14 +405,73 @@
 	};
 
 
-	// Renderer
-	RC.renderer.Renderer = Backbone.View.extend({
+	// Object Model
+	RC.renderer.ObjectModel = Backbone.Model.extend({
+		defaults: {
+			_name: "error",
+			shader: null
+		},
+		initialize: function() {}
+	});
+
+	// Object Collection
+	RC.renderer.ObjectCollection = Backbone.Collection.extend({
+		gl: null,
+		isReady: false,
+		url: config.url + "/app/objects/objects.json",
+		model: RC.renderer.ObjectModel,
+		// Initialize parameters
+		initialize: function(args, options) {
+			// Extend/Overwrite the parameters with the options in arguments
+			_.extend(this, options);
+		},
+		// Parse the data returned by fetch()
+		parse: function(data) {
+			// Make sure valid data is returned
+			if (RC.tools.exists(data) && data.length >= 1) {
+				// ...
+			}
+		}
+	});
+
+	// Ready, execute the callback once the objects are loaded
+	RC.renderer.objectsReady = function(options, callback) {
+		// Make sure objects are loaded
+		if (RC.tools.exists(RC.renderer.objects) && RC.renderer.objects.isReady) {
+			// Objects have already been fetched...
+			if (_.isFunction(callback)) {
+				callback();
+			}
+		}
+		else {
+			RC.renderer.objects = new RC.renderer.ObjectCollection(null, options);
+			RC.renderer.objects.fetch().done(function() {
+				// All the objects have been fetched, let's get to business...
+				if (_.isFunction(callback)) {
+					callback();
+				}
+			});
+		}
+	};
+
+
+	// Renderer Model
+	RC.renderer.RendererModel = Backbone.View.extend({
+		defaults: {
+			shaders: {},
+			objects: {}
+		},
+		initialize: function() {}
+	});
+
+	// Renderer View
+	RC.renderer.RendererView = Backbone.View.extend({
 		el: "canvas",
 		gl: null,
 		events: {},
-		initialize: function(args) {
-			// Extend/Overwrite the parameters with the ones passed in arguments
-			_.extend(this, args);
+		initialize: function(args, options) {
+			// Extend/Overwrite the parameters with the options passed in arguments
+			_.extend(this, options);
 
 			var gl;
 			var canvas = this.$el[0];
@@ -433,6 +494,7 @@
 			}
 			this.gl = gl;
 
+
 			// Create callback that will execute once both shaders and buffers are ready
 			var callback = function() {
 				if (RC.tools.exists(RC.renderer.shaders) && RC.renderer.shaders.isReady && RC.tools.exists(RC.renderer.buffers) && RC.renderer.buffers.isReady) {
@@ -441,10 +503,72 @@
 			};
 
 			// Request shaders and buffers
-			RC.renderer.shadersReady(RC.renderer, { gl: this.gl }, function() { console.log(RC.renderer.shaders); });
+			var that = this;
+			RC.renderer.shadersReady({ gl: this.gl }, function() { that.build(); that.render(); });
 			//RC.renderer.buffersReady(RC.renderer, {}, function() { console.log(RC.renderer.buffers); });
 		},
-		render: function() {}
+		build: function() {
+			var gl = this.gl;
+
+			gl.clearColor(0.0, 0.0, 0.0, 1.0);
+			gl.enable(gl.DEPTH_TEST);
+
+			//initBuffers();
+			this.triangleVertexPositionBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.triangleVertexPositionBuffer);
+			var vertices = [
+				0.0, 1.0, 0.0,
+				-1.0, -1.0, 0.0,
+				1.0, -1.0, 0.0
+			];
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+			this.triangleVertexPositionBuffer.itemSize = 3;
+			this.triangleVertexPositionBuffer.numItems = 3;
+
+			this.squareVertexPositionBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.squareVertexPositionBuffer);
+			vertices = [
+				1.0, 1.0, 0.0,
+				-1.0, 1.0, 0.0,
+				1.0, -1.0, 0.0,
+				-1.0, -1.0, 0.0
+			];
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+			this.squareVertexPositionBuffer.itemSize = 3;
+			this.squareVertexPositionBuffer.numItems = 4;
+
+
+			this.shader = RC.renderer.shaders.where({ _name: "simple" })[0];
+
+
+			var pMatrix = mat4.create();
+			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uPMatrix"], false, pMatrix);
+		},
+		render: function() {
+			var gl = this.gl;
+
+
+			var mvMatrix = mat4.create();
+
+			//drawScene();
+			gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+			mat4.identity(mvMatrix);
+
+			mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.triangleVertexPositionBuffer);
+			gl.vertexAttribPointer(this.shader.get("loc").attrib["aVertexPosition"], this.triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uMVMatrix"], false, mvMatrix);
+			gl.drawArrays(gl.TRIANGLES, 0, this.triangleVertexPositionBuffer.numItems);
+
+			mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.squareVertexPositionBuffer);
+			gl.vertexAttribPointer(this.shader.get("loc").attrib["aVertexPosition"], this.squareVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uMVMatrix"], false, mvMatrix);
+			gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.squareVertexPositionBuffer.numItems);
+		}
 	});
 
 
@@ -487,9 +611,7 @@
 	RC.photoworld.WorldView = Backbone.View.extend({
 		el: "#js-page",
 		events: {},
-		initialize: function() {
-			console.log($("canvas"));
-		},
+		initialize: function() {},
 		render: function() {}
 	});
 
@@ -503,14 +625,6 @@
 		},
 		index: function(args) {
 			console.log("> /index");
-
-			var buildWorld = function() {
-				RC.photoworld.world = new RC.photoworld.WorldModel({});
-				RC.photoworld.world.view = new RC.photoworld.WorldView({ model: RC.photoworld.world });
-				RC.photoworld.world.view.render();
-			};
-
-			RC.template.ready(RC.photoworld, {}, buildWorld);
 		}
 	});
 
@@ -521,88 +635,12 @@
 	RC.photoworld.init = function(){
 		console.log("Hello PhotoWorld!");
 
-		RC.photoworld.renderer = new RC.renderer.Renderer({});
-/*
-		var mvMatrix = mat4.create();
-		var pMatrix = mat4.create();
+		RC.photoworld.renderer = new RC.renderer.RendererModel({});
+		RC.photoworld.renderer.view = new RC.renderer.RendererView({ model: RC.photoworld.renderer });
 
-		function setMatrixUniforms() {
-			gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
-			gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
-		}
-
-
-
-		var triangleVertexPositionBuffer;
-		var squareVertexPositionBuffer;
-
-		function initBuffers() {
-			triangleVertexPositionBuffer = gl.createBuffer();
-			gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-			var vertices = [
-				0.0, 1.0, 0.0,
-				-1.0, -1.0, 0.0,
-				1.0, -1.0, 0.0
-			];
-			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-			triangleVertexPositionBuffer.itemSize = 3;
-			triangleVertexPositionBuffer.numItems = 3;
-
-			squareVertexPositionBuffer = gl.createBuffer();
-			gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-			vertices = [
-				1.0, 1.0, 0.0,
-				-1.0, 1.0, 0.0,
-				1.0, -1.0, 0.0,
-				-1.0, -1.0, 0.0
-			];
-			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-			squareVertexPositionBuffer.itemSize = 3;
-			squareVertexPositionBuffer.numItems = 4;
-		}
-
-
-		function drawScene() {
-			gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
-			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-
-			mat4.identity(mvMatrix);
-
-			mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
-			gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-			gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-			setMatrixUniforms();
-			gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems);
-
-
-			mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
-			gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-			gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-			setMatrixUniforms();
-			gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareVertexPositionBuffer.numItems);
-		}
-
-
-
-		function webGLStart() {
-			var canvas = document.getElementById("js-canvas");
-			initGL(canvas);
-			initShaders();
-			initBuffers();
-
-			gl.clearColor(0.0, 0.0, 0.0, 1.0);
-			gl.enable(gl.DEPTH_TEST);
-
-			drawScene();
-		}
-
-		webGLStart();
-*/
 		// Start router
-		RC.photoworld.router = new RC.photoworld.Router();
-		Backbone.history.start({ pushState: true });
+		//RC.photoworld.router = new RC.photoworld.Router();
+		//Backbone.history.start({ pushState: true });
 	};
 
 
