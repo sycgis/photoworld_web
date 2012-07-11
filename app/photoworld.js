@@ -396,6 +396,8 @@
 		else {
 			RC.renderer.shaders = new RC.renderer.ShaderCollection(null, options);
 			RC.renderer.shaders.fetch().done(function() {
+				RC.renderer.shaders.isReady = true;
+
 				// All the shaders have been fetched, let's get to business...
 				if (_.isFunction(callback)) {
 					callback();
@@ -411,7 +413,39 @@
 			_name: "error",
 			shader: null
 		},
-		initialize: function() {}
+		initialize: function() {
+			//initBuffers();
+			this.triangleVertexPositionBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.triangleVertexPositionBuffer);
+			var vertices = [
+				0.0, 1.0, 0.0,
+				-1.0, -1.0, 0.0,
+				1.0, -1.0, 0.0
+			];
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+			this.triangleVertexPositionBuffer.itemSize = 3;
+			this.triangleVertexPositionBuffer.numItems = 3;
+
+			this.squareVertexPositionBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.squareVertexPositionBuffer);
+			vertices = [
+				1.0, 1.0, 0.0,
+				-1.0, 1.0, 0.0,
+				1.0, -1.0, 0.0,
+				-1.0, -1.0, 0.0
+			];
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+			this.squareVertexPositionBuffer.itemSize = 3;
+			this.squareVertexPositionBuffer.numItems = 4;
+
+
+			this.shader = RC.renderer.shaders.where({ _name: "simple" })[0];
+
+
+			var pMatrix = mat4.create();
+			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uPMatrix"], false, pMatrix);
+		}
 	});
 
 	// Object Collection
@@ -492,26 +526,13 @@
 				console.log("WebGL not available!");
 				return;
 			}
-			this.gl = gl;
-
-
-			// Create callback that will execute once both shaders and buffers are ready
-			var callback = function() {
-				if (RC.tools.exists(RC.renderer.shaders) && RC.renderer.shaders.isReady && RC.tools.exists(RC.renderer.buffers) && RC.renderer.buffers.isReady) {
-					// ...
-				}
-			};
-
-			// Request shaders and buffers
-			var that = this;
-			RC.renderer.shadersReady({ gl: this.gl }, function() { that.build(); that.render(); });
-			//RC.renderer.buffersReady(RC.renderer, {}, function() { console.log(RC.renderer.buffers); });
-		},
-		build: function() {
-			var gl = this.gl;
 
 			gl.clearColor(0.0, 0.0, 0.0, 1.0);
 			gl.enable(gl.DEPTH_TEST);
+			this.gl = gl;
+		},
+		render: function() {
+			var gl = this.gl;
 
 			//initBuffers();
 			this.triangleVertexPositionBuffer = gl.createBuffer();
@@ -544,9 +565,6 @@
 			var pMatrix = mat4.create();
 			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
 			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uPMatrix"], false, pMatrix);
-		},
-		render: function() {
-			var gl = this.gl;
 
 
 			var mvMatrix = mat4.create();
@@ -570,6 +588,29 @@
 			gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.squareVertexPositionBuffer.numItems);
 		}
 	});
+
+	// Ready, execute the callback once the shaders and the objects are loaded
+	RC.renderer.ready = function(holder, options, callback) {
+		holder.renderer = new RC.renderer.RendererModel(null, options);
+		holder.renderer.view = new RC.renderer.RendererView({ model: RC.renderer.renderer });
+
+		var whenReady = function() {
+			if (RC.tools.exists(RC.renderer.shaders) && RC.renderer.shaders.isReady) {// && RC.tools.exists(RC.renderer.buffers) && RC.renderer.buffers.isReady) {
+				// Execute callback
+				if (_.isFunction(callback)) {
+					callback();
+				}
+				// Render the scene
+				holder.renderer.view.render();
+			}
+		};
+
+		// Make sure shaders are loaded
+		RC.renderer.shadersReady({ gl: holder.renderer.view.gl }, whenReady);
+
+		// Make sure objects are loaded
+		RC.renderer.objectsReady({ gl: holder.renderer.view.gl }, whenReady);
+	};
 
 
 	///////////////////////////////////////////////////////////////////////////
@@ -635,8 +676,7 @@
 	RC.photoworld.init = function(){
 		console.log("Hello PhotoWorld!");
 
-		RC.photoworld.renderer = new RC.renderer.RendererModel({});
-		RC.photoworld.renderer.view = new RC.renderer.RendererView({ model: RC.photoworld.renderer });
+		RC.renderer.ready(RC.photoworld);
 
 		// Start router
 		//RC.photoworld.router = new RC.photoworld.Router();
