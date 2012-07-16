@@ -46,21 +46,6 @@
 	///////////////////////////////////////////////////////////////////////////
 	// $TOOLS
 
-	// Check if variable exist
-	RC.tools.exists = function(obj) {
-		return ("undefined" !== typeof obj) && (null !== obj);
-	};
-
-	// Returns its first argument if this value is false or null; otherwise, returns its second argument
-	RC.tools.and = function(obj1, obj2) {
-		return (RC.tools.exists(obj1) || obj1) ? obj2 : obj1;
-	};
-
-	// Returns its first argument if this value is different from null and false; otherwise, returns its second argument
-	RC.tools.or = function(obj1, obj2) {
-		return (RC.tools.exists(obj1) && obj1) ? obj1 : obj2;
-	};
-
 	// HTML encode
 	RC.tools.htmlEncode = function(value) {
 		return $("<div/>").text(value).html();
@@ -79,7 +64,6 @@
 	RC.template.TemplateModel = Backbone.Model.extend({
 		defaults: {
 			_name: "error",
-			template: function() {},
 			markup: "<h1><%= lang.title %></h1><h3><%= lang.error %></h3>",
 			localization: { title: "Error !", error: "Template couldn't be loaded." },
 			data: {},
@@ -93,10 +77,10 @@
 			// Build the html only if required
 			if (this.get("dirty")) {
 				// Create underscore template
-				this.set("template", _.template(this.get("markup")));
+				var template = _.template(this.get("markup"));
 
 				// Build html from template and update flag
-				this.set("html", this.get("template")({ lang: this.get("localization"), data: this.get("data") }));
+				this.set("html", template({ lang: this.get("localization"), data: this.get("data") }));
 				this.set("dirty", false);
 			}
 		}
@@ -116,17 +100,17 @@
 		// Parse the data returned by fetch()
 		parse: function(data) {
 			// Make sure valid data is returned
-			if (RC.tools.exists(data) && data.length >= 1) {
+			if (!_.isUndefined(data) && data.length >= 1) {
 				// Loop through templates
 				for (var index in data) {
 					// Markup was returned
-					if (RC.tools.exists(data[index].markup)) {
+					if (!_.isUndefined(data[index].markup)) {
 						// Decode markup and update flag
 						data[index].markup = RC.tools.htmlDecode(data[index].markup);
 						data[index].hasMarkup = true;
 					}
 					// Localization was returned
-					if (RC.tools.exists(data[index].localization)) {
+					if (!_.isUndefined(data[index].localization)) {
 						// Parse and decode localization and update flag
 						data[index].localization = $.parseJSON(RC.tools.htmlDecode(data[index].localization));
 						data[index].hasLocalization = true;
@@ -233,7 +217,7 @@
 	// Ready, execute the callback once the templates are loaded
 	RC.template.ready = function(holder, options, callback) {
 		// Make sure templates are loaded
-		if (RC.tools.exists(holder.templates) && holder.templates.isReady) {
+		if (!_.isUndefined(holder.templates) && holder.templates.isReady) {
 			// Templates have already been fetched...
 			if (_.isFunction(callback)) {
 				callback();
@@ -315,7 +299,7 @@
 			gl.useProgram(program);
 
 			// Attrib
-			if (RC.tools.exists(locations.attrib)) {
+			if (!_.isUndefined(locations.attrib)) {
 				for (var attrib in locations.attrib) {
 					if (-1 !== locations.attrib[attrib]) {
 						// Bind attribute location
@@ -331,7 +315,7 @@
 			}
 
 			// Uniform
-			if (RC.tools.exists(locations.uniform)) {
+			if (!_.isUndefined(locations.uniform)) {
 				for (var uniform in locations.uniform) {
 					// Get uniform location
 					locations.uniform[uniform] = gl.getUniformLocation(program, uniform);
@@ -357,26 +341,24 @@
 		// Parse the data returned by fetch()
 		parse: function(data) {
 			// Make sure valid data is returned
-			if (RC.tools.exists(data) && data.length >= 1) {
+			if (!_.isUndefined(data) && data.length >= 1) {
 				// Loop through shaders
 				for (var index in data) {
 					// Fragment source was returned
-					if (RC.tools.exists(data[index].fsh)) {
+					if (!_.isUndefined(data[index].fsh)) {
 						// Decode fragment source
 						data[index].fsh = RC.tools.htmlDecode(data[index].fsh);
 					}
 					// Vertex source was returned
-					if (RC.tools.exists(data[index].vsh)) {
+					if (!_.isUndefined(data[index].vsh)) {
 						// Decode vertex source
 						data[index].vsh = RC.tools.htmlDecode(data[index].vsh);
 					}
 					// Locations were returned
-					if (RC.tools.exists(data[index].loc)) {
+					if (!_.isUndefined(data[index].loc)) {
 						// Parse and decode locations of attribs and uniforms
 						data[index].loc = $.parseJSON(RC.tools.htmlDecode(data[index].loc));
 					}
-					// GL context
-					data[index].gl = this.gl;
 				}
 			}
 
@@ -387,7 +369,7 @@
 	// Ready, execute the callback once the shaders are loaded
 	RC.renderer.shadersReady = function(options, callback) {
 		// Make sure shaders are loaded
-		if (RC.tools.exists(RC.renderer.shaders) && RC.renderer.shaders.isReady) {
+		if (!_.isUndefined(RC.renderer.shaders) && RC.renderer.shaders.isReady) {
 			// Shaders have already been fetched...
 			if (_.isFunction(callback)) {
 				callback();
@@ -413,39 +395,42 @@
 			_name: "error",
 			shader: null
 		},
-		initialize: function() {
-			//initBuffers();
-			this.triangleVertexPositionBuffer = gl.createBuffer();
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.triangleVertexPositionBuffer);
-			var vertices = [
-				0.0, 1.0, 0.0,
-				-1.0, -1.0, 0.0,
-				1.0, -1.0, 0.0
-			];
-			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-			this.triangleVertexPositionBuffer.itemSize = 3;
-			this.triangleVertexPositionBuffer.numItems = 3;
+		initialize: function(args, options) {
+/*			var gl = options.collection.gl;
 
-			this.squareVertexPositionBuffer = gl.createBuffer();
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.squareVertexPositionBuffer);
-			vertices = [
-				1.0, 1.0, 0.0,
-				-1.0, 1.0, 0.0,
-				1.0, -1.0, 0.0,
-				-1.0, -1.0, 0.0
-			];
-			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-			this.squareVertexPositionBuffer.itemSize = 3;
-			this.squareVertexPositionBuffer.numItems = 4;
+			if (this.get("_name") === "triangle") {
+				this.triangleVertexPositionBuffer = gl.createBuffer();
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.triangleVertexPositionBuffer);
+				var vertices = [
+					0.0, 1.0, 0.0,
+					-1.0, -1.0, 0.0,
+					1.0, -1.0, 0.0
+				];
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+				this.triangleVertexPositionBuffer.itemSize = 3;
+				this.triangleVertexPositionBuffer.numItems = 3;
+			}
 
+			if (this.get("_name") === "square") {
+				this.squareVertexPositionBuffer = gl.createBuffer();
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.squareVertexPositionBuffer);
+				var vertices = [
+					1.0, 1.0, 0.0,
+					-1.0, 1.0, 0.0,
+					1.0, -1.0, 0.0,
+					-1.0, -1.0, 0.0
+				];
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+				this.squareVertexPositionBuffer.itemSize = 3;
+				this.squareVertexPositionBuffer.numItems = 4;
+			}
 
 			this.shader = RC.renderer.shaders.where({ _name: "simple" })[0];
-
 
 			var pMatrix = mat4.create();
 			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
 			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uPMatrix"], false, pMatrix);
-		}
+*/		}
 	});
 
 	// Object Collection
@@ -458,12 +443,20 @@
 		initialize: function(args, options) {
 			// Extend/Overwrite the parameters with the options in arguments
 			_.extend(this, options);
+
+			// HACK
+			this.add(new RC.renderer.ObjectModel({ _name: "triangle", shader: "" }));
+			this.add(new RC.renderer.ObjectModel({ _name: "square", shader: "" }));
 		},
 		// Parse the data returned by fetch()
 		parse: function(data) {
 			// Make sure valid data is returned
-			if (RC.tools.exists(data) && data.length >= 1) {
-				// ...
+			if (!_.isUndefined(data) && data.length >= 1) {
+				// Loop through objects
+				for (var index in data) {
+					// GL context
+					data[index].gl = this.gl;
+				}
 			}
 		}
 	});
@@ -471,7 +464,7 @@
 	// Ready, execute the callback once the objects are loaded
 	RC.renderer.objectsReady = function(options, callback) {
 		// Make sure objects are loaded
-		if (RC.tools.exists(RC.renderer.objects) && RC.renderer.objects.isReady) {
+		if (!_.isUndefined(RC.renderer.objects) && RC.renderer.objects.isReady) {
 			// Objects have already been fetched...
 			if (_.isFunction(callback)) {
 				callback();
@@ -509,7 +502,7 @@
 
 			var gl;
 			var canvas = this.$el[0];
-			if (!RC.tools.exists(canvas)) {
+			if (_.isNull(canvas)) {
 				console.log("Canvas not available!");
 				return;
 			}
@@ -522,7 +515,7 @@
 			}
 			catch (e) {}
 
-			if (!RC.tools.exists(gl)) {
+			if (_.isNull(gl)) {
 				console.log("WebGL not available!");
 				return;
 			}
@@ -595,7 +588,7 @@
 		holder.renderer.view = new RC.renderer.RendererView({ model: RC.renderer.renderer });
 
 		var whenReady = function() {
-			if (RC.tools.exists(RC.renderer.shaders) && RC.renderer.shaders.isReady) {// && RC.tools.exists(RC.renderer.buffers) && RC.renderer.buffers.isReady) {
+			if (!_.isUndefined(RC.renderer.shaders) && RC.renderer.shaders.isReady) {// && !_.isUndefined(RC.renderer.buffers) && RC.renderer.buffers.isReady) {
 				// Execute callback
 				if (_.isFunction(callback)) {
 					callback();
