@@ -43,17 +43,17 @@ for fname in fshList:
 
     fsh = glob.glob(os.path.join(path, fname + ".fsh"))[0]
     current = open(fsh, "r+")
-    current_dict["fsh"] = html_escape(current.read())
+    current_dict["fragment"] = html_escape(current.read())
     current.close()
 
     vsh = glob.glob(os.path.join(path, fname + ".vsh"))[0]
     current = open(vsh, "r+")
-    current_dict["vsh"] = html_escape(current.read())
+    current_dict["vertex"] = html_escape(current.read())
     current.close()
 
     loc = glob.glob(os.path.join(path, fname + ".loc"))[0]
     current = open(loc, "r+")
-    current_dict["loc"] = html_escape(current.read())
+    current_dict["locations"] = html_escape(current.read())
     current.close()
 
     shader_dict.append(current_dict)

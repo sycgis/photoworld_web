@@ -242,67 +242,79 @@
 	RC.renderer.ShaderModel = Backbone.Model.extend({
 		defaults: {
 			_name: "error",
-			fsh: "",
-			vsh: "",
-			loc: {},
-			fragmentShader: null,
-			vertexShader: null,
-			program: null
+			locations: {},
+			program: null,
+			bound: false
 		},
+		// Initialize and build the shader's program
 		initialize: function(args, options) {
-			var gl = options.collection.gl;
+			if (!this.get("bound")) {
+				var gl = options.collection.gl;
 
-			this.compile(gl);
-			this.link(gl);
-			this.bind(gl);
+				// Compile the shader's source
+				this.compile(gl);
+				// Link the fragment and the vertex shaders
+				this.link(gl);
+				// Bind the program and the locations
+				this.bind(gl);
+			}
 		},
 		compile: function(gl) {
-			// Fragment
-			var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+			if (_.isUndefined(this.get("fragmentObject")) && _.isUndefined(this.get("vertexObject"))) {
+				// Fragment
+				var fragmentObject = gl.createShader(gl.FRAGMENT_SHADER);
 
-			gl.shaderSource(fragmentShader, this.get("fsh"));
-			gl.compileShader(fragmentShader);
+				gl.shaderSource(fragmentObject, this.get("fragment"));
+				gl.compileShader(fragmentObject);
 
-			if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-				console.log(gl.getShaderInfoLog(fragmentShader));
-				return null;
+				if (!gl.getShaderParameter(fragmentObject, gl.COMPILE_STATUS)) {
+					console.log(gl.getShaderInfoLog(fragmentObject));
+					return null;
+				}
+				this.set("fragmentObject", fragmentObject);
+				this.unset("fragment");
+
+				// Vertex
+				var vertexObject = gl.createShader(gl.VERTEX_SHADER);
+
+				gl.shaderSource(vertexObject, this.get("vertex"));
+				gl.compileShader(vertexObject);
+
+				if (!gl.getShaderParameter(vertexObject, gl.COMPILE_STATUS)) {
+					console.log(gl.getShaderInfoLog(vertexObject));
+					return null;
+				}
+				this.set("vertexObject", vertexObject);
+				this.unset("vertex");
 			}
-			this.set("fragmentShader", fragmentShader);
-
-			// Vertex
-			var vertexShader = gl.createShader(gl.VERTEX_SHADER);
-
-			gl.shaderSource(vertexShader, this.get("vsh"));
-			gl.compileShader(vertexShader);
-
-			if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-				console.log(gl.getShaderInfoLog(vertexShader));
-				return null;
-			}
-			this.set("vertexShader", vertexShader);
 		},
 		link: function(gl) {
-			var program = gl.createProgram();
+			if (_.isNull(this.get("program"))) {
+				var program = gl.createProgram();
 
-			gl.attachShader(program, this.get("fragmentShader"));
-			gl.attachShader(program, this.get("vertexShader"));
-			gl.linkProgram(program);
+				gl.attachShader(program, this.get("fragmentObject"));
+				gl.attachShader(program, this.get("vertexObject"));
+				gl.linkProgram(program);
 
-			if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-				console.log("Could not initialise shaders");
+				if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+					console.log("Could not initialise shaders");
+				}
+				this.set("program", program);
+				this.unset("fragmentObject");
+				this.unset("vertexObject");
 			}
-			this.set("program", program);
 		},
 		bind: function(gl) {
-			var locations = this.get("loc");
-			var program = this.get("program");
-			gl.useProgram(program);
+			if (!this.get("bound")) {
+				var locations = this.get("locations");
+				var program = this.get("program");
+				gl.useProgram(program);
 
-			// Attrib
-			if (!_.isUndefined(locations.attrib)) {
+				// Attrib
 				for (var attrib in locations.attrib) {
 					if (-1 !== locations.attrib[attrib]) {
 						// Bind attribute location
+						// TODO: Fix binding
 						//gl.bindAttribLocation(program, locations.attrib[attrib], attrib);
 						locations.attrib[attrib] = gl.getAttribLocation(program, attrib);
 					}
@@ -312,14 +324,14 @@
 					}
 					gl.enableVertexAttribArray(locations.attrib[attrib]);
 				}
-			}
 
-			// Uniform
-			if (!_.isUndefined(locations.uniform)) {
+				// Uniform
 				for (var uniform in locations.uniform) {
 					// Get uniform location
 					locations.uniform[uniform] = gl.getUniformLocation(program, uniform);
 				}
+
+				this.set("bound", true);
 			}
 		},
 		use: function(gl) {
@@ -345,19 +357,19 @@
 				// Loop through shaders
 				for (var index in data) {
 					// Fragment source was returned
-					if (!_.isUndefined(data[index].fsh)) {
+					if (!_.isUndefined(data[index].fragment)) {
 						// Decode fragment source
-						data[index].fsh = RC.tools.htmlDecode(data[index].fsh);
+						data[index].fragment = RC.tools.htmlDecode(data[index].fragment);
 					}
 					// Vertex source was returned
-					if (!_.isUndefined(data[index].vsh)) {
+					if (!_.isUndefined(data[index].vertex)) {
 						// Decode vertex source
-						data[index].vsh = RC.tools.htmlDecode(data[index].vsh);
+						data[index].vertex = RC.tools.htmlDecode(data[index].vertex);
 					}
 					// Locations were returned
-					if (!_.isUndefined(data[index].loc)) {
+					if (!_.isUndefined(data[index].locations)) {
 						// Parse and decode locations of attribs and uniforms
-						data[index].loc = $.parseJSON(RC.tools.htmlDecode(data[index].loc));
+						data[index].locations = $.parseJSON(RC.tools.htmlDecode(data[index].locations));
 					}
 				}
 			}
@@ -393,27 +405,29 @@
 	RC.renderer.ObjectModel = Backbone.Model.extend({
 		defaults: {
 			_name: "error",
-			shader: null
+			buffer: null,
+			size: -1,
+			count: -1
 		},
 		initialize: function(args, options) {
-/*			var gl = options.collection.gl;
+			var gl = options.collection.gl;
 
 			if (this.get("_name") === "triangle") {
-				this.triangleVertexPositionBuffer = gl.createBuffer();
-				gl.bindBuffer(gl.ARRAY_BUFFER, this.triangleVertexPositionBuffer);
+				this.set("buffer", gl.createBuffer());
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
 				var vertices = [
 					0.0, 1.0, 0.0,
 					-1.0, -1.0, 0.0,
 					1.0, -1.0, 0.0
 				];
 				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-				this.triangleVertexPositionBuffer.itemSize = 3;
-				this.triangleVertexPositionBuffer.numItems = 3;
+				this.set("size", 3);
+				this.set("count", 3);
 			}
 
 			if (this.get("_name") === "square") {
-				this.squareVertexPositionBuffer = gl.createBuffer();
-				gl.bindBuffer(gl.ARRAY_BUFFER, this.squareVertexPositionBuffer);
+				this.set("buffer", gl.createBuffer());
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
 				var vertices = [
 					1.0, 1.0, 0.0,
 					-1.0, 1.0, 0.0,
@@ -421,16 +435,10 @@
 					-1.0, -1.0, 0.0
 				];
 				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-				this.squareVertexPositionBuffer.itemSize = 3;
-				this.squareVertexPositionBuffer.numItems = 4;
+				this.set("size", 3);
+				this.set("count", 4);
 			}
-
-			this.shader = RC.renderer.shaders.where({ _name: "simple" })[0];
-
-			var pMatrix = mat4.create();
-			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uPMatrix"], false, pMatrix);
-*/		}
+		}
 	});
 
 	// Object Collection
@@ -445,8 +453,8 @@
 			_.extend(this, options);
 
 			// HACK
-			this.add(new RC.renderer.ObjectModel({ _name: "triangle", shader: "" }));
-			this.add(new RC.renderer.ObjectModel({ _name: "square", shader: "" }));
+			this.add(new RC.renderer.ObjectModel({ _name: "triangle", shader: "" }, { collection: this }));
+			this.add(new RC.renderer.ObjectModel({ _name: "square", shader: "" }, { collection: this }));
 		},
 		// Parse the data returned by fetch()
 		parse: function(data) {
@@ -527,40 +535,16 @@
 		render: function() {
 			var gl = this.gl;
 
-			//initBuffers();
-			this.triangleVertexPositionBuffer = gl.createBuffer();
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.triangleVertexPositionBuffer);
-			var vertices = [
-				0.0, 1.0, 0.0,
-				-1.0, -1.0, 0.0,
-				1.0, -1.0, 0.0
-			];
-			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-			this.triangleVertexPositionBuffer.itemSize = 3;
-			this.triangleVertexPositionBuffer.numItems = 3;
-
-			this.squareVertexPositionBuffer = gl.createBuffer();
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.squareVertexPositionBuffer);
-			vertices = [
-				1.0, 1.0, 0.0,
-				-1.0, 1.0, 0.0,
-				1.0, -1.0, 0.0,
-				-1.0, -1.0, 0.0
-			];
-			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-			this.squareVertexPositionBuffer.itemSize = 3;
-			this.squareVertexPositionBuffer.numItems = 4;
-
-
-			this.shader = RC.renderer.shaders.where({ _name: "simple" })[0];
-
+			var shader = RC.renderer.shaders.where({ _name: "simple" })[0];
+			var triangle = RC.renderer.objects.where({ _name: "triangle" })[0];
+			var square = RC.renderer.objects.where({ _name: "square" })[0];
 
 			var pMatrix = mat4.create();
-			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uPMatrix"], false, pMatrix);
-
-
 			var mvMatrix = mat4.create();
+
+			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+			gl.uniformMatrix4fv(shader.get("locations").uniform["uPMatrix"], false, pMatrix);
+
 
 			//drawScene();
 			gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
@@ -569,16 +553,16 @@
 			mat4.identity(mvMatrix);
 
 			mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.triangleVertexPositionBuffer);
-			gl.vertexAttribPointer(this.shader.get("loc").attrib["aVertexPosition"], this.triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uMVMatrix"], false, mvMatrix);
-			gl.drawArrays(gl.TRIANGLES, 0, this.triangleVertexPositionBuffer.numItems);
+			gl.bindBuffer(gl.ARRAY_BUFFER, triangle.get("buffer"));
+			gl.vertexAttribPointer(shader.get("locations").attrib["aVertexPosition"], triangle.get("size"), gl.FLOAT, false, 0, 0);
+			gl.uniformMatrix4fv(shader.get("locations").uniform["uMVMatrix"], false, mvMatrix);
+			gl.drawArrays(gl.TRIANGLES, 0, triangle.get("count"));
 
 			mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.squareVertexPositionBuffer);
-			gl.vertexAttribPointer(this.shader.get("loc").attrib["aVertexPosition"], this.squareVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-			gl.uniformMatrix4fv(this.shader.get("loc").uniform["uMVMatrix"], false, mvMatrix);
-			gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.squareVertexPositionBuffer.numItems);
+			gl.bindBuffer(gl.ARRAY_BUFFER, square.get("buffer"));
+			gl.vertexAttribPointer(shader.get("locations").attrib["aVertexPosition"], square.get("size"), gl.FLOAT, false, 0, 0);
+			gl.uniformMatrix4fv(shader.get("locations").uniform["uMVMatrix"], false, mvMatrix);
+			gl.drawArrays(gl.TRIANGLE_STRIP, 0, square.get("count"));
 		}
 	});
 
