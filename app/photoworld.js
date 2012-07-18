@@ -63,23 +63,21 @@
 	// Model
 	RC.template.TemplateModel = Backbone.Model.extend({
 		defaults: {
-			_name: "error",
-			markup: null,
-			localization: null,
-			data: {},
-			html: "",
-			dirty: true
+			_name: null, // Required
+			markup: null, // Required
+			localization: null, // Optional
+			data: null, // Optional
+			html: null
 		},
 		// Build html out of template and template data
 		build: function() {
 			// Build the html only if required
-			if (this.get("dirty")) {
+			if (_.isNull(this.get("html"))) {
 				// Create underscore template
 				var template = _.template(this.get("markup"));
 
 				// Build html from template and update flag
 				this.set("html", template({ lang: this.get("localization"), data: this.get("data") }));
-				this.set("dirty", false);
 			}
 		}
 	});
@@ -187,7 +185,7 @@
 			this.fetchLocalization(function() {
 				// Rebuild template once the localization has been updated
 				_.each(that.models, function(template) {
-					template.set("dirty", true);
+					template.set("html", null);
 					template.build();
 				});
 				// Execute callback
