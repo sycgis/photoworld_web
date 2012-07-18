@@ -216,6 +216,7 @@
 			}
 		}
 		else {
+			// Create and load templates
 			holder.templates = new RC.template.TemplateCollection(null, options);
 			holder.templates.fetchAll(function() {
 				// All the templates have been fetched, let's get to business...
@@ -233,8 +234,8 @@
 	// Shader Model
 	RC.renderer.ShaderModel = Backbone.Model.extend({
 		defaults: {
-			_name: "error",
-			locations: {},
+			_name: null, // Required
+			locations: null, // Optional
 			program: null,
 			bound: false
 		},
@@ -251,51 +252,61 @@
 				this.bind(gl);
 			}
 		},
+		// Compile the shader's source
 		compile: function(gl) {
 			if (_.isUndefined(this.get("fragmentObject")) && _.isUndefined(this.get("vertexObject"))) {
 				// Fragment
 				var fragmentObject = gl.createShader(gl.FRAGMENT_SHADER);
 
+				// Compile fragment shader
 				gl.shaderSource(fragmentObject, this.get("fragment"));
 				gl.compileShader(fragmentObject);
 
+				// Check for errors and set attributes
 				if (!gl.getShaderParameter(fragmentObject, gl.COMPILE_STATUS)) {
 					console.log(gl.getShaderInfoLog(fragmentObject));
 					return null;
 				}
-				this.set("fragmentObject", fragmentObject);
 				this.unset("fragment");
+				this.set("fragmentObject", fragmentObject);
 
 				// Vertex
 				var vertexObject = gl.createShader(gl.VERTEX_SHADER);
 
+				// Compile vertex shader
 				gl.shaderSource(vertexObject, this.get("vertex"));
 				gl.compileShader(vertexObject);
 
+				// Check for errors and set attributes
 				if (!gl.getShaderParameter(vertexObject, gl.COMPILE_STATUS)) {
 					console.log(gl.getShaderInfoLog(vertexObject));
 					return null;
 				}
-				this.set("vertexObject", vertexObject);
 				this.unset("vertex");
+				this.set("vertexObject", vertexObject);
 			}
 		},
+		// Link the fragment and the vertex shaders
 		link: function(gl) {
 			if (_.isNull(this.get("program"))) {
+				// Create program
 				var program = gl.createProgram();
 
+				// Attach and link shaders
 				gl.attachShader(program, this.get("fragmentObject"));
 				gl.attachShader(program, this.get("vertexObject"));
 				gl.linkProgram(program);
 
+				// Check for errors and set attributes
 				if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 					console.log("Could not initialise shaders");
 				}
-				this.set("program", program);
 				this.unset("fragmentObject");
 				this.unset("vertexObject");
+				this.set("program", program);
 			}
 		},
+		// Bind the program and the locations
 		bind: function(gl) {
 			if (!this.get("bound")) {
 				var locations = this.get("locations");
@@ -306,9 +317,7 @@
 				for (var attrib in locations.attrib) {
 					if (-1 !== locations.attrib[attrib]) {
 						// Bind attribute location
-						// TODO: Fix binding
-						//gl.bindAttribLocation(program, locations.attrib[attrib], attrib);
-						locations.attrib[attrib] = gl.getAttribLocation(program, attrib);
+						gl.bindAttribLocation(program, locations.attrib[attrib], attrib);
 					}
 					else {
 						// Get attribute location
@@ -323,9 +332,11 @@
 					locations.uniform[uniform] = gl.getUniformLocation(program, uniform);
 				}
 
+				// Set the shader as being bound and ready
 				this.set("bound", true);
 			}
 		},
+		// Set this program as current
 		use: function(gl) {
 			gl.useProgram(this.get("program"));
 		}
@@ -380,6 +391,7 @@
 			}
 		}
 		else {
+			// Create and load shaders
 			RC.renderer.shaders = new RC.renderer.ShaderCollection(null, options);
 			RC.renderer.shaders.fetch().done(function() {
 				RC.renderer.shaders.isReady = true;
@@ -396,14 +408,17 @@
 	// Object Model
 	RC.renderer.ObjectModel = Backbone.Model.extend({
 		defaults: {
-			_name: "error",
-			buffer: null,
-			size: -1,
-			count: -1
+			_name: null, // Required
+			shader: null, // Optional
+			buffer: null, // Optional
+			size: null,
+			count: null
 		},
+		// Initialize with parameters
 		initialize: function(args, options) {
 			var gl = options.collection.gl;
 
+			// HACK
 			if (this.get("_name") === "triangle") {
 				this.set("buffer", gl.createBuffer());
 				gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
@@ -430,6 +445,10 @@
 				this.set("size", 3);
 				this.set("count", 4);
 			}
+
+			// Set attributes
+			// Get the shader
+			// Set initial variables
 		}
 	});
 
@@ -458,8 +477,11 @@
 					data[index].gl = this.gl;
 				}
 			}
+
+			return data;
 		}
 	});
+
 
 	// Ready, execute the callback once the objects are loaded
 	RC.renderer.objectsReady = function(options, callback) {
@@ -471,8 +493,10 @@
 			}
 		}
 		else {
+			// Create and load objects
 			RC.renderer.objects = new RC.renderer.ObjectCollection(null, options);
-			RC.renderer.objects.fetch().done(function() {
+			// HACK: We're not fetching the objects yet so set the add option
+			RC.renderer.objects.fetch({ add: true }).done(function() {
 				// All the objects have been fetched, let's get to business...
 				if (_.isFunction(callback)) {
 					callback();
@@ -501,6 +525,8 @@
 			_.extend(this, options);
 
 			var gl;
+
+			// Get canvas
 			var canvas = this.$el[0];
 			if (_.isNull(canvas)) {
 				console.log("Canvas not available!");
@@ -560,25 +586,28 @@
 
 	// Ready, execute the callback once the shaders and the objects are loaded
 	RC.renderer.ready = function(holder, options, callback) {
+		// Build renderer
 		holder.renderer = new RC.renderer.RendererModel(null, options);
 		holder.renderer.view = new RC.renderer.RendererView({ model: RC.renderer.renderer });
 
-		var whenReady = function() {
-			if (!_.isUndefined(RC.renderer.shaders) && RC.renderer.shaders.isReady) {// && !_.isUndefined(RC.renderer.buffers) && RC.renderer.buffers.isReady) {
+		// Make sure shaders are loaded first
+		var whenShadersReady = function() {
+			// Then make sure the objects are loaded
+			var whenObjectsReady = function() {
 				// Execute callback
 				if (_.isFunction(callback)) {
 					callback();
 				}
 				// Render the scene
 				holder.renderer.view.render();
-			}
+			};
+
+			// Load objects
+			RC.renderer.objectsReady({ gl: holder.renderer.view.gl }, whenObjectsReady);
 		};
 
-		// Make sure shaders are loaded
-		RC.renderer.shadersReady({ gl: holder.renderer.view.gl }, whenReady);
-
-		// Make sure objects are loaded
-		RC.renderer.objectsReady({ gl: holder.renderer.view.gl }, whenReady);
+		// Load shaders
+		RC.renderer.shadersReady({ gl: holder.renderer.view.gl }, whenShadersReady);
 	};
 
 
