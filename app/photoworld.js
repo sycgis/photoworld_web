@@ -64,12 +64,10 @@
 	RC.template.TemplateModel = Backbone.Model.extend({
 		defaults: {
 			_name: "error",
-			markup: "<h1><%= lang.title %></h1><h3><%= lang.error %></h3>",
-			localization: { title: "Error !", error: "Template couldn't be loaded." },
+			markup: null,
+			localization: null,
 			data: {},
 			html: "",
-			hasMarkup: false,
-			hasLocalization: false,
 			dirty: true
 		},
 		// Build html out of template and template data
@@ -105,15 +103,13 @@
 				for (var index in data) {
 					// Markup was returned
 					if (!_.isUndefined(data[index].markup)) {
-						// Decode markup and update flag
+						// Decode markup
 						data[index].markup = RC.tools.htmlDecode(data[index].markup);
-						data[index].hasMarkup = true;
 					}
 					// Localization was returned
 					if (!_.isUndefined(data[index].localization)) {
-						// Parse and decode localization and update flag
+						// Parse and decode localization
 						data[index].localization = $.parseJSON(RC.tools.htmlDecode(data[index].localization));
-						data[index].hasLocalization = true;
 					}
 				}
 			}
@@ -145,15 +141,13 @@
 						this.isReady = true;
 
 						// 1 has markup -> set 0's markup with 1's markup and get rid of 1
-						if (models[1].get("hasMarkup")) {
+						if (!_.isNull(models[1].get("markup"))) {
 							models[0].set("markup", models[1].get("markup"));
-							models[0].set("hasMarkup", models[1].get("hasMarkup"));
 							this.remove(models[1]);
 						}
 						// 1 has localization -> set 0's localization with 1's localization and get rid of 1
-						if (models[1].get("hasLocalization")) {
+						if (!_.isNull(models[1].get("localization"))) {
 							models[0].set("localization", models[1].get("localization"));
-							models[0].set("hasLocalization",  models[1].get("hasLocalization"));
 							this.remove(models[1]);
 						}
 					}
