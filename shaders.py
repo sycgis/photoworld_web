@@ -39,7 +39,7 @@ for fname in fshList:
     current_dict = {}
     fname = fname[fname.rfind("/") + 1:fname.rfind(".")]
     print "> Current shader is: " + fname
-    current_dict["_name"] = fname
+    current_dict["name"] = fname
 
     fsh = glob.glob(os.path.join(path, fname + ".fsh"))[0]
     current = open(fsh, "r+")

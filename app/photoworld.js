@@ -30,9 +30,6 @@
 	// Namespace
 	var RC = {};
 
-	// Tools functions holder
-	RC.tools = {};
-
 	// Template classes holder
 	RC.template = {};
 
@@ -44,40 +41,64 @@
 
 
 	///////////////////////////////////////////////////////////////////////////
-	// $TOOLS
-
-	// HTML encode
-	RC.tools.htmlEncode = function(value) {
-		return $("<div/>").text(value).html();
-	};
-
-	// HTML decode
-	RC.tools.htmlDecode = function(value) {
-		return $("<div/>").html(value).text();
-	};
-
-
-	///////////////////////////////////////////////////////////////////////////
 	// $TEMPLATE
 
-	// Model
+	// Model - Simple template
 	RC.template.TemplateModel = Backbone.Model.extend({
 		defaults: {
-			_name: null, // Required
+			name: null, // Required
 			markup: null, // Required
 			localization: null, // Optional
 			data: null, // Optional
 			html: null
 		},
+		initialize: function() {
+			// Reset html if attributes change
+			this.on("change:markup", function() { this.set("html", null); });
+			this.on("change:localization", function() { this.set("html", null); });
+			this.on("change:data", function() { this.set("html", null); });
+		},
 		// Build html out of template and template data
 		build: function() {
 			// Build the html only if required
 			if (_.isNull(this.get("html"))) {
-				// Create underscore template
-				var template = _.template(this.get("markup"));
+				// Create template using the markup
+				// Combine localization and data object
+				// Execute the templating with the resulting object
+				// Set result as html
+				this.set("html", _.template(this.get("markup"))(_.extend(this.get("localization"), this.get("data"))));
+			}
+		}
+	});
 
-				// Build html from template and update flag
-				this.set("html", template({ lang: this.get("localization"), data: this.get("data") }));
+	// Model - Double pass template
+	RC.template.DoublePassTemplateModel = RC.template.TemplateModel.extend({
+		// Build html out of template and template data
+		build: function() {
+			// Build the html only if required
+			if (_.isNull(this.get("html"))) {
+				// First pass: the data
+				// Create template using the markup
+				// Execute the templating with the data object
+				var template = _.template(this.get("markup"))(this.get("data"));
+
+				// Adapt template settings to localization pass
+				_.templateSettings = {
+					interpolate: /\<\@\=(.+?)\@\>/gim,
+					evaluate: /\<\@(.+?)\@\>/gim
+				};
+
+				// Second pass: the localization
+				// Create template using the result of the data pass
+				// Execute the templating with the localization object
+				// Set result as html
+				this.set("html", _.template(template)(this.get("localization")));
+
+				// Reset template settings
+				_.templateSettings = {
+					interpolate: /\<\%\=(.+?)\%\>/gim,
+					evaluate: /\<\%(.+?)\%\>/gim
+				};
 			}
 		}
 	});
@@ -87,7 +108,14 @@
 		lang: "en",
 		isReady: false,
 		baseURL: config.url + "/app/templates",
-		model: RC.template.TemplateModel,
+		model: function(attrs, options) {
+			// Choose which model to instanciate according to the data
+			if (!_.isUndefined(attrs.double_pass) && attrs.double_pass) {
+				return new RC.template.DoublePassTemplateModel(attrs, options);
+			}
+
+			return new RC.template.TemplateModel(attrs, options);
+		},
 		// Initialize parameters
 		initialize: function(args, options) {
 			// Extend/Overwrite the parameters with the options passed in arguments
@@ -102,12 +130,12 @@
 					// Markup was returned
 					if (!_.isUndefined(data[index].markup)) {
 						// Decode markup
-						data[index].markup = RC.tools.htmlDecode(data[index].markup);
+						data[index].markup = $("<div/>").html(data[index].markup).text();
 					}
 					// Localization was returned
 					if (!_.isUndefined(data[index].localization)) {
 						// Parse and decode localization
-						data[index].localization = $.parseJSON(RC.tools.htmlDecode(data[index].localization));
+						data[index].localization = $.parseJSON($("<div/>").html(data[index].localization).text());
 					}
 				}
 			}
@@ -127,12 +155,12 @@
 			}
 			else {
 				// Get template names and avoid duplicates
-				var names = _.uniq(this.pluck("_name"));
+				var names = _.uniq(this.pluck("name"));
 
 				// Loop through available names
 				for (var index in names) {
 					// Get the templates matching the name
-					var models = this.where({ _name: names[index]});
+					var models = this.where({ name: names[index]});
 
 					// Merge them if they are two
 					if (2 === models.length) {
@@ -182,17 +210,7 @@
 		setLanguage: function(lang, callback) {
 			var that = this;
 			this.lang = lang;
-			this.fetchLocalization(function() {
-				// Rebuild template once the localization has been updated
-				_.each(that.models, function(template) {
-					template.set("html", null);
-					template.build();
-				});
-				// Execute callback
-				if (_.isFunction(callback)) {
-					callback();
-				}
-			});
+			this.fetchLocalization(callback);
 		}
 	});
 
@@ -216,7 +234,6 @@
 			}
 		}
 		else {
-			// Create and load templates
 			holder.templates = new RC.template.TemplateCollection(null, options);
 			holder.templates.fetchAll(function() {
 				// All the templates have been fetched, let's get to business...
@@ -234,7 +251,7 @@
 	// Shader Model
 	RC.renderer.ShaderModel = Backbone.Model.extend({
 		defaults: {
-			_name: null, // Required
+			name: null, // Required
 			locations: null, // Optional
 			program: null,
 			bound: false
@@ -408,7 +425,7 @@
 	// Object Model
 	RC.renderer.ObjectModel = Backbone.Model.extend({
 		defaults: {
-			_name: null, // Required
+			name: null, // Required
 			shader: null, // Optional
 			buffer: null, // Optional
 			size: null,
@@ -419,7 +436,7 @@
 			var gl = options.collection.gl;
 
 			// HACK
-			if (this.get("_name") === "triangle") {
+			if (this.get("name") === "triangle") {
 				this.set("buffer", gl.createBuffer());
 				gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
 				var vertices = [
@@ -431,7 +448,7 @@
 				this.set("size", 3);
 				this.set("count", 3);
 
-				this.set("shader", RC.renderer.shaders.where({ _name: "simple" })[0]);
+				this.set("shader", RC.renderer.shaders.where({ name: "simple" })[0]);
 
 				var pMatrix = mat4.create();
 				mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
@@ -442,7 +459,7 @@
 				gl.uniformMatrix4fv(this.get("shader").get("locations").uniform["uMVMatrix"], false, mvMatrix);
 			}
 
-			if (this.get("_name") === "square") {
+			if (this.get("name") === "square") {
 				this.set("buffer", gl.createBuffer());
 				gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
 				var vertices = [
@@ -455,7 +472,7 @@
 				this.set("size", 3);
 				this.set("count", 4);
 
-				this.set("shader", RC.renderer.shaders.where({ _name: "simple" })[0]);
+				this.set("shader", RC.renderer.shaders.where({ name: "simple" })[0]);
 
 				var pMatrix = mat4.create();
 				mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
@@ -484,8 +501,8 @@
 			_.extend(this, options);
 
 			// HACK
-			this.add(new RC.renderer.ObjectModel({ _name: "triangle", shader: "" }, { collection: this }));
-			this.add(new RC.renderer.ObjectModel({ _name: "square", shader: "" }, { collection: this }));
+			this.add(new RC.renderer.ObjectModel({ name: "triangle", shader: "" }, { collection: this }));
+			this.add(new RC.renderer.ObjectModel({ name: "square", shader: "" }, { collection: this }));
 		},
 		// Parse the data returned by fetch()
 		parse: function(data) {
@@ -576,8 +593,8 @@
 		render: function() {
 			var gl = this.gl;
 
-			var triangle = RC.renderer.objects.where({ _name: "triangle" })[0];
-			var square = RC.renderer.objects.where({ _name: "square" })[0];
+			var triangle = RC.renderer.objects.where({ name: "triangle" })[0];
+			var square = RC.renderer.objects.where({ name: "square" })[0];
 
 			//drawScene();
 			gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);

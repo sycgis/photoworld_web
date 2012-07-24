@@ -2,13 +2,13 @@
     {
         "fragment": "void main(void) {\n\tgl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n}\n", 
         "vertex": "attribute vec3 aVertexPosition;\n\nuniform mat4 uMVMatrix;\nuniform mat4 uPMatrix;\n\nvoid main(void) {\n\tgl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n}\n", 
-        "locations": "{\n\t&quot;attrib&quot;: {\n\t\t&quot;aVertexPosition&quot;: 0\n\t},\n\t&quot;uniform&quot;: {\n\t\t&quot;uMVMatrix&quot;: -1,\n\t\t&quot;uPMatrix&quot;: -1\n\t}\n}", 
-        "_name": "complex"
+        "name": "complex", 
+        "locations": "{\n\t&quot;attrib&quot;: {\n\t\t&quot;aVertexPosition&quot;: 0\n\t},\n\t&quot;uniform&quot;: {\n\t\t&quot;uMVMatrix&quot;: -1,\n\t\t&quot;uPMatrix&quot;: -1\n\t}\n}"
     }, 
     {
         "fragment": "void main(void) {\n\tgl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n}\n", 
         "vertex": "attribute vec3 aVertexPosition;\n\nuniform mat4 uMVMatrix;\nuniform mat4 uPMatrix;\n\nvoid main(void) {\n\tgl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n}\n", 
-        "locations": "{\n\t&quot;attrib&quot;: {\n\t\t&quot;aVertexPosition&quot;: 0\n\t},\n\t&quot;uniform&quot;: {\n\t\t&quot;uMVMatrix&quot;: -1,\n\t\t&quot;uPMatrix&quot;: -1\n\t}\n}", 
-        "_name": "simple"
+        "name": "simple", 
+        "locations": "{\n\t&quot;attrib&quot;: {\n\t\t&quot;aVertexPosition&quot;: 0\n\t},\n\t&quot;uniform&quot;: {\n\t\t&quot;uMVMatrix&quot;: -1,\n\t\t&quot;uPMatrix&quot;: -1\n\t}\n}"
     }
 ]
