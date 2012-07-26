@@ -164,7 +164,6 @@
 		},
 		// Parse the data returned by fetch()
 		parse: function(data) {
-console.log(data);
 			// Make sure valid data is returned
 			if (!_.isUndefined(data) && data.length >= 1) {
 				// Loop through shaders
