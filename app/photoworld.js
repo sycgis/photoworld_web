@@ -119,23 +119,26 @@
 				var program = this.get("program");
 				gl.useProgram(program);
 
-				// Attrib
-				for (var attrib in locations.attrib) {
-					if (-1 !== locations.attrib[attrib]) {
-						// Bind attribute location
-						gl.bindAttribLocation(program, locations.attrib[attrib], attrib);
+				for (var name in locations) {
+					if ("a" === name[0]) {
+						// Attribute
+						if (-1 !== locations[name]) {
+							// Bind attribute location
+							gl.bindAttribLocation(program, locations[name], name);
+						}
+						else {
+							// Get attribute location
+							locations[name] = gl.getAttribLocation(program, name);
+						}
+						gl.enableVertexAttribArray(locations[name]);
 					}
 					else {
-						// Get attribute location
-						locations.attrib[attrib] = gl.getAttribLocation(program, attrib);
+						// Uniform
+						if ("u" === name[0]) {
+							// Get uniform location
+							locations[name] = gl.getUniformLocation(program, name);
+						}
 					}
-					gl.enableVertexAttribArray(locations.attrib[attrib]);
-				}
-
-				// Uniform
-				for (var uniform in locations.uniform) {
-					// Get uniform location
-					locations.uniform[uniform] = gl.getUniformLocation(program, uniform);
 				}
 
 				// Set the shader as being bound and ready
@@ -161,6 +164,7 @@
 		},
 		// Parse the data returned by fetch()
 		parse: function(data) {
+console.log(data);
 			// Make sure valid data is returned
 			if (!_.isUndefined(data) && data.length >= 1) {
 				// Loop through shaders
@@ -216,9 +220,10 @@
 		defaults: {
 			name: null, // Required
 			shader: null, // Optional
+			values: null, // Optional
 			buffer: null, // Optional
-			size: null,
-			count: null
+			size: null, // Optional
+			count: null // Optional
 		},
 		// Initialize with parameters
 		initialize: function(args, options) {
@@ -241,11 +246,11 @@
 
 				var pMatrix = mat4.create();
 				mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-				gl.uniformMatrix4fv(this.get("shader").get("locations").uniform["uPMatrix"], false, pMatrix);
+				gl.uniformMatrix4fv(this.get("shader").get("locations")["uPMatrix"], false, pMatrix);
 
 				var mvMatrix = mat4.create();
 				mat4.identity(mvMatrix);
-				gl.uniformMatrix4fv(this.get("shader").get("locations").uniform["uMVMatrix"], false, mvMatrix);
+				gl.uniformMatrix4fv(this.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
 			}
 
 			if (this.get("name") === "square") {
@@ -265,11 +270,11 @@
 
 				var pMatrix = mat4.create();
 				mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-				gl.uniformMatrix4fv(this.get("shader").get("locations").uniform["uPMatrix"], false, pMatrix);
+				gl.uniformMatrix4fv(this.get("shader").get("locations")["uPMatrix"], false, pMatrix);
 
 				var mvMatrix = mat4.create();
 				mat4.identity(mvMatrix);
-				gl.uniformMatrix4fv(this.get("shader").get("locations").uniform["uMVMatrix"], false, mvMatrix);
+				gl.uniformMatrix4fv(this.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
 			}
 
 			// Set attributes
@@ -395,15 +400,15 @@
 			//triangle.view.render();
 			mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
 			gl.bindBuffer(gl.ARRAY_BUFFER, triangle.get("buffer"));
-			gl.vertexAttribPointer(triangle.get("shader").get("locations").attrib["aVertexPosition"], triangle.get("size"), gl.FLOAT, false, 0, 0);
-			gl.uniformMatrix4fv(triangle.get("shader").get("locations").uniform["uMVMatrix"], false, mvMatrix);
+			gl.vertexAttribPointer(triangle.get("shader").get("locations")["aVertexPosition"], triangle.get("size"), gl.FLOAT, false, 0, 0);
+			gl.uniformMatrix4fv(triangle.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
 			gl.drawArrays(gl.TRIANGLES, 0, triangle.get("count"));
 
 			//square.view.render();
 			mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
 			gl.bindBuffer(gl.ARRAY_BUFFER, square.get("buffer"));
-			gl.vertexAttribPointer(square.get("shader").get("locations").attrib["aVertexPosition"], square.get("size"), gl.FLOAT, false, 0, 0);
-			gl.uniformMatrix4fv(square.get("shader").get("locations").uniform["uMVMatrix"], false, mvMatrix);
+			gl.vertexAttribPointer(square.get("shader").get("locations")["aVertexPosition"], square.get("size"), gl.FLOAT, false, 0, 0);
+			gl.uniformMatrix4fv(square.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
 			gl.drawArrays(gl.TRIANGLE_STRIP, 0, square.get("count"));
 		}
 	});
