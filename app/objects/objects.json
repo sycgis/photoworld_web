@@ -1,5 +1,6 @@
 [
     {
+        "shader_name": "complex", 
         "count": 4, 
         "vertices": [
             1.0, 
@@ -15,11 +16,11 @@
             -1.0, 
             0.0
         ], 
-        "shader": "complex", 
         "name": "square", 
         "size": 3
     }, 
     {
+        "shader_name": "simple", 
         "count": 3, 
         "vertices": [
             0.0, 
@@ -32,7 +33,6 @@
             -1.0, 
             0.0
         ], 
-        "shader": "simple", 
         "name": "triangle", 
         "size": 3
     }

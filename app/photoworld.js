@@ -228,61 +228,44 @@
 		initialize: function(args, options) {
 			var gl = options.collection.gl;
 
+			this.set("buffer", gl.createBuffer());
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
+			var vertices = [
+				0.0, 1.0, 0.0,
+				-1.0, -1.0, 0.0,
+				1.0, -1.0, 0.0
+			];
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.get("vertices")), gl.STATIC_DRAW);
+			this.unset("vertices");
+
+			this.set("shader", RC.renderer.shaders.where({ name: this.get("shader_name") })[0]);
+			this.unset("shader_name");
+
+			this.set("values",  $.extend(true, {}, this.get("shader").get("locations")));
+
 			// HACK
-			if (this.get("name") === "triangle") {
-				this.set("buffer", gl.createBuffer());
-				gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
-				var vertices = [
-					0.0, 1.0, 0.0,
-					-1.0, -1.0, 0.0,
-					1.0, -1.0, 0.0
-				];
-				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-				this.set("size", 3);
-				this.set("count", 3);
+			var pMatrix = mat4.create();
+			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+			gl.uniformMatrix4fv(this.get("shader").get("locations")["uPMatrix"], false, pMatrix);
 
-				this.set("shader", RC.renderer.shaders.where({ name: "simple" })[0]);
-				this.set("values", this.get("shader").get("locations").slice(0));
+			var mvMatrix = mat4.create();
+			mat4.identity(mvMatrix);
+			mat4.translate(mvMatrix, [0.0, 0.0, 0.0]);
+			gl.uniformMatrix4fv(this.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
 
-				var pMatrix = mat4.create();
-				mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-				gl.uniformMatrix4fv(this.get("shader").get("locations")["uPMatrix"], false, pMatrix);
-
-				var mvMatrix = mat4.create();
-				mat4.identity(mvMatrix);
-				gl.uniformMatrix4fv(this.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
-			}
-
-			if (this.get("name") === "square") {
-				this.set("buffer", gl.createBuffer());
-				gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
-				var vertices = [
-					1.0, 1.0, 0.0,
-					-1.0, 1.0, 0.0,
-					1.0, -1.0, 0.0,
-					-1.0, -1.0, 0.0
-				];
-				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-				this.set("size", 3);
-				this.set("count", 4);
-
-				this.set("shader", RC.renderer.shaders.where({ name: "simple" })[0]);
-				this.set("values", this.get("shader").get("locations").slice(0));
-
-				var pMatrix = mat4.create();
-				mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-				gl.uniformMatrix4fv(this.get("shader").get("locations")["uPMatrix"], false, pMatrix);
-
-				var mvMatrix = mat4.create();
-				mat4.identity(mvMatrix);
-				gl.uniformMatrix4fv(this.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
-			}
-
-			// Set attributes
-			// Get the shader
-			// Set initial variables
+			this.on(
+				"change:values",
+				function() {
+					// HACK
+					gl.uniformMatrix4fv(this.get("shader").get("locations")["uMVMatrix"], false, this.get("values")["uMVMatrix"]);
+				}
+			);
 		},
-		render: function() {}
+		render: function(gl) {
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
+			gl.vertexAttribPointer(this.get("shader").get("locations")["aVertexPosition"], this.get("size"), gl.FLOAT, false, 0, 0);
+			gl.drawArrays(gl.TRIANGLES, 0, this.get("count"));
+		}
 	});
 
 	// Object Collection
@@ -295,10 +278,6 @@
 		initialize: function(args, options) {
 			// Extend/Overwrite the parameters with the options in arguments
 			_.extend(this, options);
-
-			// HACK
-			this.add(new RC.renderer.ObjectModel({ name: "triangle", shader: "" }, { collection: this }));
-			this.add(new RC.renderer.ObjectModel({ name: "square", shader: "" }, { collection: this }));
 		},
 		// Parse the data returned by fetch()
 		parse: function(data) {
@@ -314,7 +293,6 @@
 			return data;
 		}
 	});
-
 
 	// Ready, execute the callback once the objects are loaded
 	RC.renderer.objectsReady = function(options, callback) {
@@ -386,29 +364,35 @@
 		render: function() {
 			var gl = this.gl;
 
-			var triangle = RC.renderer.objects.where({ name: "triangle" })[0];
-			var square = RC.renderer.objects.where({ name: "square" })[0];
-
-			//drawScene();
 			gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+			var triangle = RC.renderer.objects.where({ name: "triangle" })[0];
+			var values = triangle.get("values");
+
 			var mvMatrix = mat4.create();
 			mat4.identity(mvMatrix);
-
-			//triangle.view.render();
 			mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
-			gl.bindBuffer(gl.ARRAY_BUFFER, triangle.get("buffer"));
-			gl.vertexAttribPointer(triangle.get("shader").get("locations")["aVertexPosition"], triangle.get("size"), gl.FLOAT, false, 0, 0);
-			gl.uniformMatrix4fv(triangle.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
-			gl.drawArrays(gl.TRIANGLES, 0, triangle.get("count"));
+			values["uMVMatrix"] = mvMatrix;
+			triangle.set("values", values);
+console.log(triangle.get("values"));
+			// Why do I need to trigger the event myself?
+			triangle.trigger("change:values");
+			triangle.render(gl);
 
-			//square.view.render();
-			mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
-			gl.bindBuffer(gl.ARRAY_BUFFER, square.get("buffer"));
-			gl.vertexAttribPointer(square.get("shader").get("locations")["aVertexPosition"], square.get("size"), gl.FLOAT, false, 0, 0);
-			gl.uniformMatrix4fv(square.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
-			gl.drawArrays(gl.TRIANGLE_STRIP, 0, square.get("count"));
+
+			var square = RC.renderer.objects.where({ name: "square" })[0];
+			values = square.get("values");
+
+			var mvMatrix2 = mat4.create();
+			mat4.identity(mvMatrix2);
+			mat4.translate(mvMatrix2, [1.5, 0.0, -7.0]);
+			values["uMVMatrix"] = mvMatrix2;
+			square.set("values", values);
+console.log(square.get("values"));
+			// Why do I need to trigger the event myself?
+			square.trigger("change:values");
+			square.render(gl);
 		}
 	});
 

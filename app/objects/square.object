@@ -1,5 +1,5 @@
 {
-	"shader": "complex",
+	"shader_name": "complex",
 	"size": 3,
 	"count": 4,
 	"vertices": [
