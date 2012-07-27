@@ -2,6 +2,7 @@
 	"shader_name": "complex",
 	"size": 3,
 	"count": 4,
+	"mode": "TRIANGLE_STRIP",
 	"vertices": [
 		1.0, 1.0, 0.0,
 		-1.0, 1.0, 0.0,

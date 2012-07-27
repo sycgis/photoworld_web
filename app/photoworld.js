@@ -230,41 +230,34 @@
 
 			this.set("buffer", gl.createBuffer());
 			gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
-			var vertices = [
-				0.0, 1.0, 0.0,
-				-1.0, -1.0, 0.0,
-				1.0, -1.0, 0.0
-			];
 			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.get("vertices")), gl.STATIC_DRAW);
 			this.unset("vertices");
+
+			var glMode = gl.LINES;
+			switch (this.get("mode")) {
+				case "LINE_LOOP": glMode = gl.LINE_LOOP; break;
+				case "LINE_STRIP": glMode = gl.LINE_STRIP; break;
+				case "POINTS": glMode = gl.POINTS; break;
+				case "TRIANGLES": glMode = gl.TRIANGLES; break;
+				case "TRIANGLE_FAN": glMode = gl.TRIANGLE_FAN; break;
+				case "TRIANGLE_STRIP": glMode = gl.TRIANGLE_STRIP; break;
+			}
+			this.set("mode", glMode);
 
 			this.set("shader", RC.renderer.shaders.where({ name: this.get("shader_name") })[0]);
 			this.unset("shader_name");
 
 			this.set("values",  $.extend(true, {}, this.get("shader").get("locations")));
-
-			// HACK
-			var pMatrix = mat4.create();
-			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-			gl.uniformMatrix4fv(this.get("shader").get("locations")["uPMatrix"], false, pMatrix);
-
-			var mvMatrix = mat4.create();
-			mat4.identity(mvMatrix);
-			mat4.translate(mvMatrix, [0.0, 0.0, 0.0]);
-			gl.uniformMatrix4fv(this.get("shader").get("locations")["uMVMatrix"], false, mvMatrix);
-
-			this.on(
-				"change:values",
-				function() {
-					// HACK
-					gl.uniformMatrix4fv(this.get("shader").get("locations")["uMVMatrix"], false, this.get("values")["uMVMatrix"]);
-				}
-			);
 		},
 		render: function(gl) {
+			this.get("shader").use(gl);
+
+			gl.uniformMatrix4fv(this.get("shader").get("locations")["uPMatrix"], false, this.get("values")["uPMatrix"]);
+			gl.uniformMatrix4fv(this.get("shader").get("locations")["uMVMatrix"], false, this.get("values")["uMVMatrix"]);
+
 			gl.bindBuffer(gl.ARRAY_BUFFER, this.get("buffer"));
 			gl.vertexAttribPointer(this.get("shader").get("locations")["aVertexPosition"], this.get("size"), gl.FLOAT, false, 0, 0);
-			gl.drawArrays(gl.TRIANGLES, 0, this.get("count"));
+			gl.drawArrays(this.get("mode"), 0, this.get("count"));
 		}
 	});
 
@@ -278,19 +271,6 @@
 		initialize: function(args, options) {
 			// Extend/Overwrite the parameters with the options in arguments
 			_.extend(this, options);
-		},
-		// Parse the data returned by fetch()
-		parse: function(data) {
-			// Make sure valid data is returned
-			if (!_.isUndefined(data) && data.length >= 1) {
-				// Loop through objects
-				for (var index in data) {
-					// GL context
-					data[index].gl = this.gl;
-				}
-			}
-
-			return data;
 		}
 	});
 
@@ -306,8 +286,7 @@
 		else {
 			// Create and load objects
 			RC.renderer.objects = new RC.renderer.ObjectCollection(null, options);
-			// HACK: We're not fetching the objects yet so set the add option
-			RC.renderer.objects.fetch({ add: true }).done(function() {
+			RC.renderer.objects.fetch().done(function() {
 				// All the objects have been fetched, let's get to business...
 				if (_.isFunction(callback)) {
 					callback();
@@ -367,31 +346,29 @@
 			gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+			var pMatrix = mat4.create();
+			mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+
 			var triangle = RC.renderer.objects.where({ name: "triangle" })[0];
 			var values = triangle.get("values");
 
 			var mvMatrix = mat4.create();
 			mat4.identity(mvMatrix);
 			mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
+			values["uPMatrix"] = pMatrix;
 			values["uMVMatrix"] = mvMatrix;
 			triangle.set("values", values);
-console.log(triangle.get("values"));
-			// Why do I need to trigger the event myself?
-			triangle.trigger("change:values");
-			triangle.render(gl);
 
+			triangle.render(gl);
 
 			var square = RC.renderer.objects.where({ name: "square" })[0];
 			values = square.get("values");
 
-			var mvMatrix2 = mat4.create();
-			mat4.identity(mvMatrix2);
-			mat4.translate(mvMatrix2, [1.5, 0.0, -7.0]);
-			values["uMVMatrix"] = mvMatrix2;
+			mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
+			values["uPMatrix"] = pMatrix;
+			values["uMVMatrix"] = mvMatrix;
 			square.set("values", values);
-console.log(square.get("values"));
-			// Why do I need to trigger the event myself?
-			square.trigger("change:values");
+
 			square.render(gl);
 		}
 	});
