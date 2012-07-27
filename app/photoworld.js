@@ -242,6 +242,7 @@
 				this.set("count", 3);
 
 				this.set("shader", RC.renderer.shaders.where({ name: "simple" })[0]);
+				this.set("values", this.get("shader").get("locations").slice(0));
 
 				var pMatrix = mat4.create();
 				mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
@@ -266,6 +267,7 @@
 				this.set("count", 4);
 
 				this.set("shader", RC.renderer.shaders.where({ name: "simple" })[0]);
+				this.set("values", this.get("shader").get("locations").slice(0));
 
 				var pMatrix = mat4.create();
 				mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
@@ -279,7 +281,8 @@
 			// Set attributes
 			// Get the shader
 			// Set initial variables
-		}
+		},
+		render: function() {}
 	});
 
 	// Object Collection
@@ -311,9 +314,6 @@
 			return data;
 		}
 	});
-
-	// Object View
-	RC.renderer.ObjectView = Backbone.View.extend({});
 
 
 	// Ready, execute the callback once the objects are loaded
