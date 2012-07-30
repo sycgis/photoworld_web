@@ -53,3 +53,17 @@ for infile in glob.glob(os.path.join(path, "*.en.strings")):
 html = open(os.path.join(path, "en.json"), "w+")
 html.write(json.dumps(html_dict, indent=4))
 html.close()
+
+print "Building french file"
+html_dict = []
+for infile in glob.glob(os.path.join(path, "*.fr.strings")):
+    print "> Current file is: " + infile
+    current_dict = {}
+    current_dict["name"] = infile[infile.rfind("/") + 1:-11]
+    current = open(infile, "r+")
+    current_dict["localization"] = html_escape(current.read())
+    current.close()
+    html_dict.append(current_dict)
+html = open(os.path.join(path, "fr.json"), "w+")
+html.write(json.dumps(html_dict, indent=4))
+html.close()
